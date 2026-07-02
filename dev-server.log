@@ -1,0 +1,25 @@
+
+> phoenix-detail-page@1.0.0 dev:local
+> next dev -p 3002
+
+▲ Next.js 16.2.4 (Turbopack)
+- Local:         http://localhost:3002
+- Network:       http://192.168.0.148:3002
+✓ Ready in 590ms
+
+ GET / 200 in 464ms (next.js: 161ms, application-code: 302ms)
+ GET / 200 in 77ms (next.js: 8ms, application-code: 69ms)
+ GET /api/config 200 in 196ms (next.js: 173ms, application-code: 23ms)
+✓ Compiled in 279ms
+ GET / 200 in 877ms (next.js: 365ms, application-code: 512ms)
+ GET / 200 in 70ms (next.js: 7ms, application-code: 63ms)
+ GET /studio 200 in 1427ms (next.js: 1300ms, application-code: 127ms)
+✓ Compiled in 177ms
+ GET / 200 in 190ms (next.js: 75ms, application-code: 116ms)
+ GET /studio 200 in 259ms (next.js: 65ms, application-code: 194ms)
+✓ Compiled in 58ms
+ GET / 200 in 229ms (next.js: 98ms, application-code: 131ms)
+✓ Compiled in 93ms
+ GET / 200 in 183ms (next.js: 78ms, application-code: 104ms)
+✓ Compiled in 80ms
+ GET / 200 in 210ms (next.js: 95ms, application-code: 115ms)
