@@ -2153,7 +2153,7 @@ function SectionResultCard({
       <div className="relative aspect-[9/16] border-b border-border bg-muted">
         {activeRevision?.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={activeRevision.imageUrl} alt={`${section.name} ${activeRevision.label}`} className="h-full w-full object-cover" />
+          <img src={activeRevision.imageUrl} alt={`${section.name} ${activeRevision.label}`} className="h-full w-full object-contain" />
         ) : (
           <PlaceholderThumb index={index} />
         )}
