@@ -12,9 +12,11 @@ import {
   FileText,
   Image as ImageIcon,
   KeyRound,
+  Check,
   Loader2,
   LogIn,
   LogOut,
+  Pencil,
   RefreshCw,
   Settings,
   Sparkles,
@@ -36,7 +38,8 @@ import {
   onAuthChange,
   upsertProject,
   listCloudProjects,
-  loadCloudProject
+  loadCloudProject,
+  renameCloudProject
 } from "@/lib/cloud-sync";
 
 type Model = "openai" | "google";
@@ -248,6 +251,27 @@ export function RedesignWizard() {
   const [cloudUser, setCloudUser] = React.useState<User | null>(null);
   const [cloudDialogOpen, setCloudDialogOpen] = React.useState(false);
   const [cloudProjects, setCloudProjects] = React.useState<Array<{ local_id: string; title: string; updated_at?: string }>>([]);
+  const [editingCloudId, setEditingCloudId] = React.useState<string | null>(null);
+  const [editingCloudTitle, setEditingCloudTitle] = React.useState("");
+
+  async function commitCloudRename(localId: string) {
+    const nextTitle = editingCloudTitle.trim();
+    setEditingCloudId(null);
+    if (!nextTitle) return;
+    const previous = cloudProjects.find((cp) => cp.local_id === localId)?.title;
+    if (nextTitle === previous) return;
+    setCloudProjects((current) => current.map((cp) => (cp.local_id === localId ? { ...cp, title: nextTitle } : cp)));
+    setProjects((current) => current.map((p) => (p.id === localId ? { ...p, title: nextTitle } : p)));
+    try {
+      await renameCloudProject(localId, nextTitle);
+      // keep the local IndexedDB copy title in sync when it exists
+      const existing = projects.find((p) => p.id === localId);
+      if (existing) await saveProjectToDb({ ...existing, title: nextTitle });
+      setToast("이름을 변경했습니다.");
+    } catch {
+      setToast("이름 변경 중 오류가 발생했습니다.");
+    }
+  }
   const [generating, setGenerating] = React.useState(false);
   const [generationPlan, setGenerationPlan] = React.useState<GenerationPlan | null>(null);
   const [generationProgress, setGenerationProgress] = React.useState<GenerationProgress | null>(null);
@@ -940,8 +964,45 @@ export function RedesignWizard() {
               {cloudProjects.length > 0 ? (
                 cloudProjects.map((cp) => (
                   <div key={cp.local_id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-white p-3 text-sm">
-                    <span className="min-w-0 truncate font-medium">{cp.title}</span>
-                    <Button size="sm" variant="secondary" onClick={async () => {
+                    {editingCloudId === cp.local_id ? (
+                      <div className="flex min-w-0 flex-1 items-center gap-1">
+                        <Input
+                          autoFocus
+                          value={editingCloudTitle}
+                          onChange={(event) => setEditingCloudTitle(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") commitCloudRename(cp.local_id);
+                            if (event.key === "Escape") setEditingCloudId(null);
+                          }}
+                          onBlur={() => commitCloudRename(cp.local_id)}
+                          className="h-8 text-sm"
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="size-8 shrink-0 text-[#0d9488]"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => commitCloudRename(cp.local_id)}
+                          aria-label="이름 저장"
+                        >
+                          <Check className="size-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="group flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                        onClick={() => {
+                          setEditingCloudTitle(cp.title);
+                          setEditingCloudId(cp.local_id);
+                        }}
+                        aria-label={`${cp.title} 이름 수정`}
+                      >
+                        <span className="min-w-0 truncate font-medium">{cp.title}</span>
+                        <Pencil className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
+                      </button>
+                    )}
+                    <Button size="sm" variant="secondary" className="shrink-0" onClick={async () => {
                       const full = await loadCloudProject(cp.local_id);
                       if (full && full.sections) {
                         const restored: Project = {

@@ -102,6 +102,18 @@ export async function loadCloudProject(localId: string): Promise<CloudProjectRow
   return data;
 }
 
+export async function renameCloudProject(localId: string, title: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  const user = await getCurrentUser();
+  if (!user) return;
+  await sb
+    .from("projects")
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq("local_id", localId)
+    .eq("user_id", user.id);
+}
+
 export async function deleteCloudProject(localId: string): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;
