@@ -752,10 +752,20 @@ export function RedesignWizard() {
           aria-label="홈보드로 이동"
         >
           <div className="grid size-12 place-items-center overflow-hidden rounded-md border border-[#ffd3c8] bg-[#fff3ee] shadow-sm">
-            <NextImage src="/phoenix-ai-logo.png" alt="Phoenix AI" width={42} height={42} className="object-contain" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="size-8 text-[#ff6f61]" aria-hidden="true">
+              {/* 마법 모자 (뾰족 원뿔 + 넓은 챙) */}
+              <path d="M9.2 3.4 C9.8 3.3 10 3.7 9.8 4.2 L12.6 11.2 C12.9 11.9 12.4 12.6 11.6 12.5 L5.4 12.5 C4.6 12.6 4.2 11.8 4.6 11.2 L8.5 4.2 C8.7 3.8 8.9 3.5 9.2 3.4 Z" fill="currentColor" stroke="none" />
+              <ellipse cx="8.5" cy="12.9" rx="6" ry="1.7" fill="currentColor" stroke="none" />
+              <path d="M8.4 8.2 l0.34 0.9 0.9 0.34 -0.9 0.34 -0.34 0.9 -0.34 -0.9 -0.9 -0.34 0.9 -0.34 Z" fill="#fff" stroke="none" />
+              {/* 지팡이 */}
+              <path d="M13 21 L19.4 13.2" strokeWidth="1.9" />
+              <path d="M20 10.4 l0.62 1.75 1.75 0.62 -1.75 0.62 -0.62 1.75 -0.62 -1.75 -1.75 -0.62 1.75 -0.62 Z" fill="currentColor" stroke="none" />
+            </svg>
           </div>
           <div className="min-w-0">
-            <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">RENOABLE AI LAB</span>
+            <span className="mt-0.5 block text-xs font-extrabold tracking-tight">
+              <span className="text-[#ff6f61]">RENOABLE</span> <span className="text-black">AI LAB</span>
+            </span>
           </div>
         </button>
         <nav className="grid gap-2 max-[1120px]:grid-cols-3">
