@@ -22,7 +22,14 @@ function getSupabase(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
-  _client = createClient(url, key);
+  _client = createClient(url, key, {
+    auth: {
+      flowType: "pkce",
+      detectSessionInUrl: true,
+      persistSession: true,
+      autoRefreshToken: true
+    }
+  });
   return _client;
 }
 
@@ -35,8 +42,14 @@ export async function signInWithGoogle(): Promise<void> {
   if (!sb) return;
   await sb.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${window.location.origin}/studio` }
+    options: { redirectTo: `${window.location.origin}/auth/callback` }
   });
+}
+
+export async function exchangeCode(code: string): Promise<void> {
+  const sb = getSupabase();
+  if (!sb) return;
+  await sb.auth.exchangeCodeForSession(code);
 }
 
 export async function signOut(): Promise<void> {
