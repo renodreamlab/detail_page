@@ -6,12 +6,15 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  Cloud,
   Download,
   FileImage,
   FileText,
   Image as ImageIcon,
   KeyRound,
   Loader2,
+  LogIn,
+  LogOut,
   RefreshCw,
   Settings,
   Sparkles,
@@ -25,6 +28,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { type User } from "@supabase/supabase-js";
+import {
+  isCloudEnabled,
+  signInWithGoogle,
+  signOut as cloudSignOut,
+  onAuthChange,
+  upsertProject,
+  listCloudProjects,
+  loadCloudProject
+} from "@/lib/cloud-sync";
 
 type Model = "openai" | "google";
 type View = "dashboard" | "workspace" | "results";
@@ -232,6 +245,9 @@ export function RedesignWizard() {
   const [knowledgeAdminKey, setKnowledgeAdminKey] = React.useState("");
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [knowledgeOpen, setKnowledgeOpen] = React.useState(false);
+  const [cloudUser, setCloudUser] = React.useState<User | null>(null);
+  const [cloudDialogOpen, setCloudDialogOpen] = React.useState(false);
+  const [cloudProjects, setCloudProjects] = React.useState<Array<{ local_id: string; title: string; updated_at?: string }>>([]);
   const [generating, setGenerating] = React.useState(false);
   const [generationPlan, setGenerationPlan] = React.useState<GenerationPlan | null>(null);
   const [generationProgress, setGenerationProgress] = React.useState<GenerationProgress | null>(null);
@@ -241,6 +257,10 @@ export function RedesignWizard() {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const knowledgeInputRef = React.useRef<HTMLInputElement>(null);
   const generationAbortRef = React.useRef<AbortController | null>(null);
+
+  React.useEffect(() => {
+    return onAuthChange(setCloudUser);
+  }, []);
 
   React.useEffect(() => {
     const initial = loadProjects();
@@ -594,6 +614,17 @@ export function RedesignWizard() {
       setProjects((current) => [savedProject, ...current.filter((candidate) => candidate.id !== savedProject.id)].slice(0, 20));
       setActiveProject(savedProject);
       setToast("결과를 저장했습니다. 홈보드에서 다시 열 수 있습니다.");
+      if (cloudUser) {
+        upsertProject({
+          local_id: savedProject.id,
+          title: savedProject.title,
+          channel: savedProject.channel,
+          ratio: savedProject.ratio,
+          model: savedProject.model,
+          request: savedProject.request,
+          sections: savedProject.sections
+        }).catch(() => {});
+      }
     } catch (error) {
       setToast(error instanceof Error ? error.message : "결과 저장 중 오류가 발생했습니다.");
     }
@@ -756,6 +787,14 @@ export function RedesignWizard() {
             onKnowledge={() => setKnowledgeOpen(true)}
             knowledgeCount={Math.max(knowledgeItems.length, serverConfig.knowledgeDocuments)}
             serverConfig={serverConfig}
+            cloudUser={cloudUser}
+            onLogin={signInWithGoogle}
+            onLogout={() => cloudSignOut().then(() => setCloudUser(null))}
+            onCloud={async () => {
+              const list = await listCloudProjects();
+              setCloudProjects(list);
+              setCloudDialogOpen(true);
+            }}
           />
         )}
         {view === "workspace" && (
@@ -885,6 +924,55 @@ export function RedesignWizard() {
             )}
             <div className="flex justify-end">
               <Button onClick={() => setKnowledgeOpen(false)}>완료</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={cloudDialogOpen} onOpenChange={setCloudDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>내 클라우드 작업</DialogTitle>
+            <DialogDescription>{cloudUser?.email} 계정에 저장된 작업 목록입니다.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 p-4">
+            <div className="max-h-80 overflow-y-auto grid gap-2">
+              {cloudProjects.length > 0 ? (
+                cloudProjects.map((cp) => (
+                  <div key={cp.local_id} className="flex items-center justify-between gap-2 rounded-md border border-border bg-white p-3 text-sm">
+                    <span className="min-w-0 truncate font-medium">{cp.title}</span>
+                    <Button size="sm" variant="secondary" onClick={async () => {
+                      const full = await loadCloudProject(cp.local_id);
+                      if (full && full.sections) {
+                        const restored: Project = {
+                          id: full.local_id,
+                          title: full.title,
+                          channel: full.channel || "스마트스토어",
+                          model: (full.model as Model) || "openai",
+                          count: (full.sections as unknown[]).length,
+                          ratio: full.ratio || "9:16",
+                          status: "저장됨",
+                          files: [],
+                          request: full.request || "",
+                          createdAt: full.created_at || new Date().toISOString(),
+                          savedAt: full.updated_at,
+                          sections: full.sections as SectionResult[]
+                        };
+                        await saveProjectToDb(restored);
+                        setProjects((current) => [restored, ...current.filter((c) => c.id !== restored.id)].slice(0, 20));
+                        setActiveProject(restored);
+                        setView("results");
+                      }
+                      setCloudDialogOpen(false);
+                    }}>불러오기</Button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground py-4 text-center">저장된 클라우드 작업이 없습니다.</p>
+              )}
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={() => setCloudDialogOpen(false)}>닫기</Button>
             </div>
           </div>
         </DialogContent>
@@ -1432,7 +1520,11 @@ function Dashboard({
   onSettings,
   onKnowledge,
   knowledgeCount,
-  serverConfig
+  serverConfig,
+  cloudUser,
+  onLogin,
+  onLogout,
+  onCloud
 }: {
   projects: Project[];
   onNew: () => void;
@@ -1442,6 +1534,10 @@ function Dashboard({
   onKnowledge: () => void;
   knowledgeCount: number;
   serverConfig: ServerConfig;
+  cloudUser: User | null;
+  onLogin: () => void;
+  onLogout: () => void;
+  onCloud: () => void;
 }) {
   const averageImageCount = projects.length > 0
     ? (projects.reduce((sum, project) => sum + project.count, 0) / projects.length).toFixed(1)
@@ -1450,6 +1546,16 @@ function Dashboard({
   return (
     <section>
       <Topbar eyebrow="HOME">
+        {isCloudEnabled() && (
+          cloudUser ? (
+            <>
+              <Button variant="secondary" onClick={onCloud}><Cloud className="size-4" />내 클라우드</Button>
+              <Button variant="secondary" onClick={onLogout}><LogOut className="size-4" />로그아웃</Button>
+            </>
+          ) : (
+            <Button variant="secondary" onClick={onLogin}><LogIn className="size-4" />Google 로그인</Button>
+          )
+        )}
         <Button variant="secondary" onClick={onSettings}><KeyRound className="size-4" />API 키 설정</Button>
         <Button variant="secondary" onClick={onKnowledge}><FileText className="size-4" />맞춤형 Data 설정 {knowledgeCount > 0 ? `(${knowledgeCount})` : ""}</Button>
         <Button onClick={onNew}><Sparkles className="size-4" />새 작업 시작</Button>
