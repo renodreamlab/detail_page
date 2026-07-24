@@ -700,7 +700,6 @@ export function RedesignWizard() {
             <NextImage src="/phoenix-ai-logo.png" alt="Phoenix AI" width={42} height={42} className="object-contain" />
           </div>
           <div className="min-w-0">
-            <strong className="block truncate text-sm leading-tight">phoenix detail page</strong>
             <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">RENOABLE AI LAB</span>
           </div>
         </button>
