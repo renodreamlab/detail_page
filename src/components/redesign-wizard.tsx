@@ -763,8 +763,8 @@ export function RedesignWizard() {
             </svg>
           </div>
           <div className="min-w-0">
-            <span className="mt-0.5 block text-xs font-extrabold tracking-tight">
-              <span className="text-[#ff6f61]">RENOABLE</span> <span className="text-black">AI LAB</span>
+            <span className="block text-xl font-extrabold leading-none tracking-tight">
+              <span className="text-[#ff6f61]">RENO</span><span className="text-black">ABLE</span>
             </span>
           </div>
         </button>
