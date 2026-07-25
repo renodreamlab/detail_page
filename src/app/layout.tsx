@@ -14,10 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "RENOABLE Detail Page Maker",
-  description: "기존 상세페이지 이미지와 PDF를 분석해 구매전환 중심 상세페이지 이미지로 리디자인합니다.",
-  icons: {
-    icon: [{ url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" }]
-  }
+  description: "기존 상세페이지 이미지와 PDF를 분석해 구매전환 중심 상세페이지 이미지로 리디자인합니다."
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
