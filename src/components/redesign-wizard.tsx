@@ -786,15 +786,15 @@ export function RedesignWizard() {
             </div>
             <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5">
               <span className="min-w-0 flex-1 truncate">OpenAI Image 2.0</span>
-              <Badge className="shrink-0 whitespace-nowrap" variant={openaiKey ? "pulseBlue" : "pulseRed"}>{openaiKey ? "설정됨" : "미설정"}</Badge>
+              <Badge className="shrink-0 whitespace-nowrap" variant={openaiKey ? "pulseBlue" : "pulseAmber"}>{openaiKey ? "설정됨" : "미설정"}</Badge>
             </div>
             <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5">
               <span className="min-w-0 flex-1 truncate">Google Nano Banana 2</span>
-              <Badge className="shrink-0 whitespace-nowrap" variant={googleKey ? "pulseBlue" : "pulseRed"}>{googleKey ? "설정됨" : "미설정"}</Badge>
+              <Badge className="shrink-0 whitespace-nowrap" variant={googleKey ? "pulseBlue" : "pulseAmber"}>{googleKey ? "설정됨" : "미설정"}</Badge>
             </div>
             <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5">
               <span className="min-w-0 flex-1 truncate">맞춤형 Data 설정</span>
-              <Badge className="shrink-0 whitespace-nowrap" variant={serverConfig.knowledgeConfigured ? "pulseBlue" : "pulseRed"}>{serverConfig.knowledgeConfigured ? "설정됨" : "미설정"}</Badge>
+              <Badge className="shrink-0 whitespace-nowrap" variant={serverConfig.knowledgeConfigured ? "pulseBlue" : "pulseAmber"}>{serverConfig.knowledgeConfigured ? "설정됨" : "미설정"}</Badge>
             </div>
           </CardContent>
         </Card>
