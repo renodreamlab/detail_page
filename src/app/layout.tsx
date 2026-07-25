@@ -13,12 +13,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "phoenix detail page",
+  title: "RENOABLE Page Maker",
   description: "기존 상세페이지 이미지와 PDF를 분석해 구매전환 중심 상세페이지 이미지로 리디자인합니다.",
   icons: {
-    icon: "/phoenix-ai-logo.png",
-    shortcut: "/phoenix-ai-logo.png",
-    apple: "/phoenix-ai-logo.png"
+    icon: [{ url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" }]
   }
 };
 
