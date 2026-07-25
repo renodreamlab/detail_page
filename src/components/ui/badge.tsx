@@ -11,7 +11,7 @@ const badgeVariants = cva("inline-flex min-h-6 items-center rounded-full px-2.5 
       blue: "bg-[#eef4ff] text-[#2f5fb8]",
       pulseBlue: "animate-pulse bg-[#e8f0ff] text-[#2454c7] ring-1 ring-[#6ea8ff]/45",
       pulseRed: "animate-pulse bg-[#fff0f0] text-[#cf2e2e] ring-1 ring-[#ff8a8a]/55",
-      pulseAmber: "animate-pulse bg-[#fff6df] text-[#b7860b] ring-1 ring-[#ffd36a]/70"
+      pulseOrange: "animate-pulse bg-[#fff1ed] text-[#e04a2f] ring-1 ring-[#ff6f61]/55"
     }
   },
   defaultVariants: {
