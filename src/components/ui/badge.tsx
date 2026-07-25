@@ -9,9 +9,8 @@ const badgeVariants = cva("inline-flex min-h-6 items-center rounded-full px-2.5 
       dark: "bg-foreground text-background",
       green: "bg-[#e8fbf7] text-[#08796f]",
       blue: "bg-[#eef4ff] text-[#2f5fb8]",
-      pulseBlue: "animate-pulse bg-[#e8f0ff] text-[#2454c7] ring-1 ring-[#6ea8ff]/45",
-      pulseRed: "animate-pulse bg-[#fff0f0] text-[#cf2e2e] ring-1 ring-[#ff8a8a]/55",
-      pulseOrange: "animate-pulse bg-[#fff1ed] text-[#e04a2f] ring-1 ring-[#ff6f61]/55"
+      solidBlue: "bg-[#2454c7] text-white",
+      solidGray: "bg-[#6b7280] text-white"
     }
   },
   defaultVariants: {
