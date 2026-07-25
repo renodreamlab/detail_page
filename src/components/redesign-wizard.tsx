@@ -747,26 +747,23 @@ export function RedesignWizard() {
       <aside className="sticky top-0 h-screen border-r border-white/60 bg-white/78 p-4 shadow-[inset_-1px_0_0_rgba(255,255,255,0.7),0_20px_60px_rgba(16,23,38,0.06)] backdrop-blur-xl max-[1120px]:static max-[1120px]:h-auto max-[1120px]:border-b max-[1120px]:border-r-0">
         <button
           type="button"
-          className="mb-5 flex w-full items-center gap-3 rounded-md border border-border bg-white/85 p-2.5 text-left shadow-sm transition hover:border-[#ff9f7a] hover:bg-white"
+          className="mb-5 flex w-full items-center rounded-md border border-border bg-white/85 px-3 py-3 text-left shadow-sm transition hover:border-[#ff9f7a] hover:bg-white"
           onClick={() => setView("dashboard")}
           aria-label="홈보드로 이동"
         >
-          <div className="grid size-12 place-items-center overflow-hidden rounded-md border border-[#ffd3c8] bg-[#fff3ee] shadow-sm">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="size-8 text-[#ff6f61]" aria-hidden="true">
-              {/* 마법 모자 (뾰족 원뿔 + 넓은 챙) */}
-              <path d="M9.2 3.4 C9.8 3.3 10 3.7 9.8 4.2 L12.6 11.2 C12.9 11.9 12.4 12.6 11.6 12.5 L5.4 12.5 C4.6 12.6 4.2 11.8 4.6 11.2 L8.5 4.2 C8.7 3.8 8.9 3.5 9.2 3.4 Z" fill="currentColor" stroke="none" />
-              <ellipse cx="8.5" cy="12.9" rx="6" ry="1.7" fill="currentColor" stroke="none" />
-              <path d="M8.4 8.2 l0.34 0.9 0.9 0.34 -0.9 0.34 -0.34 0.9 -0.34 -0.9 -0.9 -0.34 0.9 -0.34 Z" fill="#fff" stroke="none" />
-              {/* 지팡이 */}
-              <path d="M13 21 L19.4 13.2" strokeWidth="1.9" />
-              <path d="M20 10.4 l0.62 1.75 1.75 0.62 -1.75 0.62 -0.62 1.75 -0.62 -1.75 -1.75 -0.62 1.75 -0.62 Z" fill="currentColor" stroke="none" />
+          <span className="text-2xl font-extrabold leading-none tracking-tight" aria-label="RENOABLE">
+            <span className="text-[#ff6f61]">RENO</span>
+            {/* A 글자를 마법사 모자로 형상화 */}
+            <svg viewBox="0 0 20 26" fill="none" className="inline-block h-[0.74em] w-[0.6em] align-[-0.008em] text-[#ff6f61]" aria-hidden="true">
+              {/* 모자 원뿔 = A 획 (굽은 뾰족 끝) */}
+              <path d="M1.8 25 L9 3.4 C9.4 2.3 9.9 1.4 10.6 1.6 C11.2 1.8 11 2.9 10.8 4 L18.2 25" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+              {/* 챙 = A 가로획 (살짝 굽은 모자 챙) */}
+              <path d="M3.9 17.4 C8.4 15.6 11.8 15.6 16.3 17.4" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+              {/* 모자의 별 */}
+              <path d="M10.2 8.6 l0.5 1.3 1.3 0.5 -1.3 0.5 -0.5 1.3 -0.5 -1.3 -1.3 -0.5 1.3 -0.5 Z" fill="currentColor" />
             </svg>
-          </div>
-          <div className="min-w-0">
-            <span className="block text-xl font-extrabold leading-none tracking-tight">
-              <span className="text-[#ff6f61]">RENO</span><span className="text-black">ABLE</span>
-            </span>
-          </div>
+            <span className="text-black">BLE</span>
+          </span>
         </button>
         <nav className="grid gap-2 max-[1120px]:grid-cols-3">
           {[
