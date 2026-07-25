@@ -751,18 +751,11 @@ export function RedesignWizard() {
           onClick={() => setView("dashboard")}
           aria-label="홈보드로 이동"
         >
-          <span className="text-2xl font-extrabold leading-none tracking-tight" aria-label="RENOABLE">
-            <span className="text-[#ff6f61]">RENO</span>
-            {/* A 글자를 마법사 모자로 형상화 */}
-            <svg viewBox="0 0 20 26" fill="none" className="inline-block h-[0.74em] w-[0.6em] align-[-0.008em] text-[#ff6f61]" aria-hidden="true">
-              {/* 모자 원뿔 = A 획 (굽은 뾰족 끝) */}
-              <path d="M1.8 25 L9 3.4 C9.4 2.3 9.9 1.4 10.6 1.6 C11.2 1.8 11 2.9 10.8 4 L18.2 25" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
-              {/* 챙 = A 가로획 (살짝 굽은 모자 챙) */}
-              <path d="M3.9 17.4 C8.4 15.6 11.8 15.6 16.3 17.4" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
-              {/* 모자의 별 */}
-              <path d="M10.2 8.6 l0.5 1.3 1.3 0.5 -1.3 0.5 -0.5 1.3 -0.5 -1.3 -1.3 -0.5 1.3 -0.5 Z" fill="currentColor" />
-            </svg>
-            <span className="text-black">BLE</span>
+          <span className="min-w-0">
+            <span className="block text-base font-extrabold leading-none tracking-tight">
+              <span className="text-[#ff6f61]">RENO</span><span className="text-black">ABLE</span>
+            </span>
+            <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Detail Page Maker</span>
           </span>
         </button>
         <nav className="grid gap-2 max-[1120px]:grid-cols-3">
