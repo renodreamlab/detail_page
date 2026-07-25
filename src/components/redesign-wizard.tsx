@@ -1644,7 +1644,7 @@ function Dashboard({
                     onClick={() => onOpenProject(project)}
                     aria-label={`${project.title} 열기`}
                   >
-                    <MiniThumb />
+                    <MiniThumb src={project.sections.find((section) => section.imageUrl)?.imageUrl} />
                     <div className="min-w-0">
                       <strong className="block truncate text-sm">{project.title}</strong>
                       <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -2424,11 +2424,18 @@ function OptionGroup({
   );
 }
 
-function MiniThumb() {
+function MiniThumb({ src }: { src?: string }) {
   return (
     <div className="relative h-[68px] w-[52px] overflow-hidden rounded-md border border-border bg-muted">
-      <div className="absolute left-2 right-2 top-2 h-4 rounded bg-foreground" />
-      <div className="absolute bottom-2 left-2 right-2 h-7 rounded-md bg-gradient-to-br from-[#ff6f61] to-[#2dd4bf]" />
+      {src ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <>
+          <div className="absolute left-2 right-2 top-2 h-4 rounded bg-foreground" />
+          <div className="absolute bottom-2 left-2 right-2 h-7 rounded-md bg-gradient-to-br from-[#ff6f61] to-[#2dd4bf]" />
+        </>
+      )}
     </div>
   );
 }
