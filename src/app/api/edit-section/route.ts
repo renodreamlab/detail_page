@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { openAIImageSizeForRatio, ratioEditPromptInstruction } from "@/lib/image-spec";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
-const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || "1024x1536";
 const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || "high";
 const OPENAI_IMAGE_FALLBACK_QUALITY = process.env.OPENAI_IMAGE_FALLBACK_QUALITY || "medium";
 const OPENAI_IMAGE_PARTIAL_IMAGES = process.env.OPENAI_IMAGE_PARTIAL_IMAGES || "1";
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     const openaiKey = String(body.openaiKey || "");
     const googleKey = String(body.googleKey || "");
     const apiKey = provider === "google" ? googleKey : openaiKey;
+    const ratio = String(project.ratio || "9:16");
 
     if (!apiKey) {
       return NextResponse.json(
@@ -46,7 +47,8 @@ export async function POST(request: NextRequest) {
 
     const prompt = [
       "너는 커머스 상세페이지 섹션 이미지 편집 엔진이다.",
-      "첨부된 9:16 상세페이지 섹션 이미지를 기반으로 전체 톤과 제품 맥락은 유지하되, 사용자가 요청한 부분만 자연스럽게 편집한다.",
+      "첨부된 상세페이지 섹션 이미지를 기반으로 전체 톤과 제품 맥락은 유지하되, 사용자가 요청한 부분만 자연스럽게 편집한다.",
+      ratioEditPromptInstruction(ratio),
       `프로젝트: ${project.title || "상세페이지 리디자인"}`,
       `판매 채널: ${project.channel || "스마트스토어"}`,
       `섹션: ${section.id || ""} ${section.name || ""}`,
@@ -60,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     const edited = provider === "google"
       ? await editWithGoogle({ apiKey, prompt, image })
-      : await editWithOpenAI({ apiKey, prompt, image });
+      : await editWithOpenAI({ apiKey, prompt, image, ratio });
 
     return NextResponse.json({
       imageUrl: `data:${edited.mimeType};base64,${edited.buffer.toString("base64")}`,
@@ -77,17 +79,20 @@ export async function POST(request: NextRequest) {
 async function editWithOpenAI({
   apiKey,
   prompt,
-  image
+  image,
+  ratio
 }: {
   apiKey: string;
   prompt: string;
   image: { mimeType: string; buffer: Buffer };
+  ratio: string;
 }): Promise<EditedImage> {
   try {
     return await editWithOpenAIQuality({
       apiKey,
       prompt,
       image,
+      ratio,
       quality: OPENAI_IMAGE_QUALITY,
       timeoutMs: OPENAI_IMAGE_HIGH_TIMEOUT_MS
     });
@@ -103,6 +108,7 @@ async function editWithOpenAI({
       apiKey,
       prompt,
       image,
+      ratio,
       quality: OPENAI_IMAGE_FALLBACK_QUALITY,
       timeoutMs: OPENAI_IMAGE_FALLBACK_TIMEOUT_MS
     });
@@ -114,19 +120,21 @@ async function editWithOpenAIQuality({
   apiKey,
   prompt,
   image,
+  ratio,
   quality,
   timeoutMs
 }: {
   apiKey: string;
   prompt: string;
   image: { mimeType: string; buffer: Buffer };
+  ratio: string;
   quality: string;
   timeoutMs: number;
 }): Promise<EditedImage> {
   const form = new FormData();
   form.append("model", OPENAI_IMAGE_MODEL);
   form.append("prompt", prompt);
-  form.append("size", OPENAI_IMAGE_SIZE);
+  form.append("size", openAIImageSizeForRatio(ratio));
   form.append("quality", quality);
   form.append("output_format", "png");
   form.append("stream", "true");

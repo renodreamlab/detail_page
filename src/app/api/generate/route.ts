@@ -2,12 +2,12 @@
 import { randomUUID } from "node:crypto";
 import { canUseCommonKnowledge } from "@/lib/knowledge-access";
 import { isRagConfigured, retrieveKnowledge } from "@/lib/rag";
+import { openAIImageSizeForRatio, ratioPromptInstruction } from "@/lib/image-spec";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const OPENAI_IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
-const OPENAI_IMAGE_SIZE = process.env.OPENAI_IMAGE_SIZE || "1024x1536";
 const OPENAI_IMAGE_QUALITY = process.env.OPENAI_IMAGE_QUALITY || "high";
 const OPENAI_IMAGE_FALLBACK_QUALITY = process.env.OPENAI_IMAGE_FALLBACK_QUALITY || "medium";
 const OPENAI_IMAGE_PARTIAL_IMAGES = process.env.OPENAI_IMAGE_PARTIAL_IMAGES || "1";
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
         console.info(`[generate] ${provider} ${section.section_id} start (${index + 1}/${sections.length})`);
         const image = provider === "google"
           ? await generateGoogleImage({ apiKey, prompt: section.promptText, references })
-          : await generateOpenAIImage({ apiKey, prompt: section.promptText, references });
+          : await generateOpenAIImage({ apiKey, prompt: section.promptText, references, ratio });
 
         generatedSections.push({
           ...section,
@@ -302,12 +302,13 @@ async function analyzeWithGoogle({ apiKey, prompt, references }: { apiKey: strin
   return parseMaybeJson(text);
 }
 
-async function generateOpenAIImage({ apiKey, prompt, references }: { apiKey: string; prompt: string; references: ReferenceImage[] }): Promise<GeneratedImage> {
+async function generateOpenAIImage({ apiKey, prompt, references, ratio }: { apiKey: string; prompt: string; references: ReferenceImage[]; ratio: string }): Promise<GeneratedImage> {
   try {
     return await generateOpenAIImageWithQuality({
       apiKey,
       prompt,
       references,
+      ratio,
       quality: OPENAI_IMAGE_QUALITY,
       timeoutMs: OPENAI_IMAGE_HIGH_TIMEOUT_MS
     });
@@ -323,6 +324,7 @@ async function generateOpenAIImage({ apiKey, prompt, references }: { apiKey: str
       apiKey,
       prompt,
       references,
+      ratio,
       quality: OPENAI_IMAGE_FALLBACK_QUALITY,
       timeoutMs: OPENAI_IMAGE_FALLBACK_TIMEOUT_MS
     });
@@ -334,19 +336,21 @@ async function generateOpenAIImageWithQuality({
   apiKey,
   prompt,
   references,
+  ratio,
   quality,
   timeoutMs
 }: {
   apiKey: string;
   prompt: string;
   references: ReferenceImage[];
+  ratio: string;
   quality: string;
   timeoutMs: number;
 }): Promise<GeneratedImage> {
   const form = new FormData();
   form.append("model", OPENAI_IMAGE_MODEL);
   form.append("prompt", prompt);
-  form.append("size", OPENAI_IMAGE_SIZE);
+  form.append("size", openAIImageSizeForRatio(ratio));
   form.append("quality", quality);
   form.append("output_format", "png");
   form.append("stream", "true");
@@ -413,7 +417,7 @@ function buildSections(
     const promptText = [
       "너는 커머스 상세페이지 리디자인 이미지 생성 엔진이다.",
       `이미지 생성 모델: ${modelInfo.label} (${modelInfo.id})`,
-      "세로형 9:16 상세페이지 섹션 이미지 1장을 생성한다.",
+      ratioPromptInstruction(payload.options.ratio),
       `섹션: ${template.name}`,
       `목적: ${template.purpose}`,
       `원본 참조: ${template.source}`,

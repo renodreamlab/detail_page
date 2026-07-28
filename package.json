@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.110.8",
     "class-variance-authority": "latest",
     "clsx": "latest",
+    "jszip": "^3.10.1",
     "lucide-react": "latest",
     "next": "latest",
     "openai": "^6.34.0",

@@ -23,6 +23,7 @@ import {
   Trash2,
   Upload
 } from "lucide-react";
+import JSZip from "jszip";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -857,6 +858,7 @@ export function RedesignWizard() {
             onGenerateRest={generateRemainingSections}
             generating={generating}
             editingSectionId={editingSectionId}
+            openaiKey={openaiKey}
           />
         )}
       </main>
@@ -1230,6 +1232,36 @@ function downloadDataUrl(url: string, fileName: string) {
   document.body.appendChild(link);
   link.click();
   link.remove();
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  try {
+    downloadDataUrl(url, fileName);
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+async function imageUrlToBlob(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error("다운로드할 이미지를 읽지 못했습니다.");
+  return response.blob();
+}
+
+async function downloadSectionsAsZip(projectTitle: string, sections: SectionResult[]) {
+  const zip = new JSZip();
+  let count = 0;
+  for (const [index, section] of sections.entries()) {
+    if (!section.imageUrl) continue;
+    const blob = await imageUrlToBlob(section.imageUrl);
+    zip.file(buildImageFileName(projectTitle, section, index), blob);
+    count += 1;
+  }
+  if (count === 0) throw new Error("압축할 이미지가 없습니다.");
+  const zipBlob = await zip.generateAsync({ type: "blob" });
+  downloadBlob(zipBlob, `${sanitizeDownloadName(projectTitle || "redesign-results")}.zip`);
+  return count;
 }
 
 function buildImageFileName(projectTitle: string, section: SectionResult, index: number, revisionLabel = "") {
@@ -1907,7 +1939,7 @@ function Workspace(props: {
             </CardHeader>
             <CardContent className="grid gap-4">
               <OptionGroup label="결과 장수" value={String(count)} options={[["1", "히어로 1장"], ["8", "기본 6~8장"]]} onChange={(value) => setCount(Number(value))} />
-              <OptionGroup label="출력 비율" value={ratio} options={[["9:16", "9:16"], ["1080×1920", "1080×1920"]]} onChange={setRatio} />
+              <OptionGroup label="출력 비율" value={ratio} options={[["9:16", "9:16 상세"], ["4:5", "4:5 피드"], ["1:1", "1:1 정사각"]]} onChange={setRatio} />
               <ChannelOptionGroup value={channel} onChange={setChannel} />
             </CardContent>
           </Card>
@@ -2006,7 +2038,8 @@ function Results({
   onEditSection,
   onGenerateRest,
   generating,
-  editingSectionId
+  editingSectionId,
+  openaiKey
 }: {
   project?: Project | null;
   rolloutRequest: string;
@@ -2017,6 +2050,7 @@ function Results({
   onGenerateRest: () => void;
   generating: boolean;
   editingSectionId: string | null;
+  openaiKey: string;
 }) {
   if (!project) {
     return <Card><CardContent>아직 생성된 프로젝트가 없습니다.</CardContent></Card>;
@@ -2024,19 +2058,23 @@ function Results({
   const showRollout = project.sections.length < 8;
   const title = projectDisplayTitle(project);
   const downloadableSections = project.sections.filter((section) => section.imageUrl);
+  const [downloadingZip, setDownloadingZip] = React.useState(false);
 
-  function downloadAllImages() {
+  async function downloadAllImages() {
     if (downloadableSections.length === 0) {
       onToast("다운로드할 이미지가 없습니다.");
       return;
     }
-
-    downloadableSections.forEach((section, index) => {
-      window.setTimeout(() => {
-        downloadDataUrl(section.imageUrl || "", buildImageFileName(title, section, index));
-      }, index * 250);
-    });
-    onToast(`${downloadableSections.length}개 이미지를 다운로드합니다.`);
+    setDownloadingZip(true);
+    onToast(`${downloadableSections.length}개 이미지를 ZIP으로 압축하고 있습니다.`);
+    try {
+      const count = await downloadSectionsAsZip(title, downloadableSections);
+      onToast(`${count}개 이미지를 ZIP으로 다운로드합니다.`);
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "ZIP 다운로드 중 오류가 발생했습니다.");
+    } finally {
+      setDownloadingZip(false);
+    }
   }
 
   return (
@@ -2044,7 +2082,7 @@ function Results({
       <Topbar eyebrow="OUTPUT" title={title}>
         <Button variant="secondary" onClick={onSave}><FileText className="size-4" />결과 저장</Button>
         <Button variant="secondary" onClick={() => onToast("히어로 1장 재생성은 다음 단계에서 연결할 예정입니다.")}><RefreshCw className="size-4" />히어로 다시 생성</Button>
-        <Button onClick={downloadAllImages} disabled={downloadableSections.length === 0}><Download className="size-4" />결과 다운로드</Button>
+        <Button onClick={downloadAllImages} disabled={downloadableSections.length === 0 || downloadingZip}>{downloadingZip ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}결과 ZIP 다운로드</Button>
       </Topbar>
 
       <div className={cn("grid gap-4", showRollout ? "grid-cols-[minmax(0,1fr)_320px] max-xl:grid-cols-1" : "grid-cols-1")}>
@@ -2063,7 +2101,9 @@ function Results({
                 section={section}
                 index={index}
                 projectTitle={title}
+                openaiKey={openaiKey}
                 onEditSection={onEditSection}
+                onToast={onToast}
                 editing={editingSectionId === section.id}
                 disabled={generating}
               />
@@ -2117,19 +2157,24 @@ function SectionResultCard({
   section,
   index,
   projectTitle,
+  openaiKey,
   onEditSection,
+  onToast,
   editing,
   disabled
 }: {
   section: SectionResult;
   index: number;
   projectTitle: string;
+  openaiKey: string;
   onEditSection: (sectionId: string, editRequest: string, model: Model) => void;
+  onToast: (message: string) => void;
   editing: boolean;
   disabled: boolean;
 }) {
   const [editRequest, setEditRequest] = React.useState("");
   const [editModel, setEditModel] = React.useState<Model>("openai");
+  const [aiCommentPreset, setAiCommentPreset] = React.useState("");
   const revisions = React.useMemo(() => ensureSectionRevisions(section), [section]);
   const currentIndex = Math.max(0, revisions.findIndex((revision) => revision.imageUrl === section.imageUrl));
   const [revisionIndex, setRevisionIndex] = React.useState(currentIndex);
@@ -2141,6 +2186,43 @@ function SectionResultCard({
 
   function addPreset(text: string) {
     setEditRequest((current) => current ? `${current}\n${text}` : text);
+  }
+
+  async function generateAiComment(label: string, text: string) {
+    const trimmedKey = openaiKey.trim();
+    if (!trimmedKey) {
+      onToast("OpenAI API 키를 먼저 설정해주세요.");
+      return;
+    }
+
+    setAiCommentPreset(label);
+    try {
+      const response = await fetch("/api/ai-comment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          openaiKey: trimmedKey,
+          presetLabel: label,
+          presetText: text,
+          projectTitle,
+          section: {
+            id: section.id,
+            name: section.name,
+            purpose: section.purpose,
+            source: section.source,
+            prompt: section.prompt
+          }
+        })
+      });
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(data.error || "AI 멘트 생성에 실패했습니다.");
+      addPreset(String(data.comment || "").trim());
+      onToast(`${label} AI 멘트를 추가했습니다.`);
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : "AI 멘트 생성 중 오류가 발생했습니다.");
+    } finally {
+      setAiCommentPreset("");
+    }
   }
 
   function moveRevision(step: number) {
@@ -2223,11 +2305,25 @@ function SectionResultCard({
             placeholder="예: 이 이미지는 헤드라인을 줄이고, 제품 이미지를 오른쪽으로 옮겨 다른 섹션과 덜 반복되게 해주세요."
             className="min-h-20 text-xs"
           />
-          <div className="flex flex-wrap gap-1.5">
+          <div className="grid gap-1.5">
             {quickEditPresets.map(([label, text]) => (
-              <Button key={label} type="button" variant="secondary" size="sm" onClick={() => addPreset(text)}>
-                {label}
-              </Button>
+              <div key={label} className="grid grid-cols-[minmax(0,1fr)_auto] gap-1.5">
+                <Button type="button" variant="secondary" size="sm" className="justify-start px-2" onClick={() => addPreset(text)}>
+                  {label}
+                </Button>
+                <Button
+                  type="button"
+                  variant="accent"
+                  size="sm"
+                  className="px-2"
+                  onClick={() => generateAiComment(label, text)}
+                  disabled={disabled || Boolean(aiCommentPreset)}
+                  title={`${label} AI 멘트 생성`}
+                >
+                  {aiCommentPreset === label ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                  AI 멘트
+                </Button>
+              </div>
             ))}
           </div>
           <OptionGroup
