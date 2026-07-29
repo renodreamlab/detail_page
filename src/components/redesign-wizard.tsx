@@ -2064,6 +2064,7 @@ function Results({
   }
   const showRollout = project.sections.length < 8;
   const title = projectDisplayTitle(project);
+  const saved = project.status === "저장됨";
   const downloadableSections = project.sections.filter((section) => section.imageUrl);
   const [downloadingZip, setDownloadingZip] = React.useState(false);
 
@@ -2087,7 +2088,19 @@ function Results({
   return (
     <section>
       <Topbar eyebrow="OUTPUT" title={title}>
-        <Button variant="secondary" onClick={onSave}><FileText className="size-4" />결과 저장</Button>
+        <Button
+          variant="secondary"
+          onClick={saved ? undefined : onSave}
+          aria-disabled={saved}
+          style={saved ? { cursor: "default" } : undefined}
+          className={cn(
+            saved
+              ? "text-muted-foreground/60 hover:border-border hover:bg-card hover:text-muted-foreground/60"
+              : "animate-pulse"
+          )}
+        >
+          <FileText className="size-4" />{saved ? "저장됨" : "결과 저장"}
+        </Button>
         <Button variant="secondary" onClick={() => onToast("히어로 1장 재생성은 다음 단계에서 연결할 예정입니다.")}><RefreshCw className="size-4" />히어로 다시 생성</Button>
         <Button onClick={downloadAllImages} disabled={downloadableSections.length === 0 || downloadingZip}>{downloadingZip ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}결과 ZIP 다운로드</Button>
       </Topbar>
