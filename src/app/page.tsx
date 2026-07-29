@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { EntryCta } from "@/components/entry-cta";
 
 export default function Page() {
   return (
@@ -25,12 +26,7 @@ export default function Page() {
 
       <section className="relative z-10 grid min-h-[calc(100vh-9rem)] place-items-center px-5 py-12 text-center">
         <div className="grid justify-items-center gap-4">
-          <Link
-            href="/studio"
-            className="inline-flex min-h-11 items-center justify-center rounded-md bg-[#ff6f61] px-5 text-xs font-black text-white shadow-[0_18px_45px_rgba(255,111,97,0.34)] transition hover:bg-[#ff806f]"
-          >
-            phoenix detail page 입장
-          </Link>
+          <EntryCta />
         </div>
       </section>
 
