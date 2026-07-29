@@ -437,6 +437,7 @@ function buildSections(
   const modelSections = modelSectionSet(totalCount);
   return sectionTemplates(count, startSection).map((template) => {
     const sectionNumber = Number(template.id.replace(/\D/g, "")) || 1;
+    const sectionTopic = template.name.replace(/^S\d+\s*/, "").trim() || template.name;
     const modelRule = modelSections.has(sectionNumber)
       ? `모델/인물 규칙: 전체 ${totalCount}장 중 이 페이지는 모델(인물) 등장이 허용된 페이지다(총 ${modelSections.size}회만 등장). 요청이나 제품 맥락상 모델이 필요하면 이 페이지에만 인물 1명을 사용 장면/라이프스타일 컷으로 자연스럽게 배치한다. 다른 페이지와 같은 포즈·구도·인물을 반복하지 않는다.`
       : "모델/인물 규칙: 이 페이지에는 모델, 인물, 얼굴, 전신, 착용컷, 손 모델을 새로 넣지 않는다. 제품컷, 카드, 표, 근거 자료 중심으로 구성한다.";
@@ -444,8 +445,9 @@ function buildSections(
       "너는 커머스 상세페이지 리디자인 이미지 생성 엔진이다.",
       `이미지 생성 모델: ${modelInfo.label} (${modelInfo.id})`,
       ratioPromptInstruction(payload.options.ratio),
-      `섹션: ${template.name} (전체 ${totalCount}장 중 ${sectionNumber}번째)`,
+      `이 페이지 주제(내부 구분용, 화면에 절대 표기 금지): ${sectionTopic} — 전체 ${totalCount}장 중 ${sectionNumber}번째`,
       `목적: ${template.purpose}`,
+      "섹션 코드/라벨 금지 규칙: 'S1', 'S2', 'S3' 같은 섹션 코드나 '문제 공감', '베네핏', '히어로', 'POINT', 'SECTION' 같은 내부 구분용 이름·라벨을 이미지 안 어디에도(배지, 말머리, 제목, 태그, 워터마크) 절대 렌더링하지 않는다. 위 '이 페이지 주제'는 내부 작업 구분용 메타데이터일 뿐 고객이 보는 상세페이지에는 표시되지 않아야 한다. 헤드라인은 섹션 코드가 아니라 제품/고객 관점의 실제 카피로 작성한다.",
       `원본 참조: ${template.source}`,
       `권장 레이아웃: ${template.layout}`,
       `판매 채널: ${payload.options.channel}`,

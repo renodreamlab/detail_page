@@ -51,10 +51,11 @@ export async function POST(request: NextRequest) {
       ratioEditPromptInstruction(ratio),
       `프로젝트: ${project.title || "상세페이지 리디자인"}`,
       `판매 채널: ${project.channel || "스마트스토어"}`,
-      `섹션: ${section.id || ""} ${section.name || ""}`,
+      `이 페이지 주제(내부 구분용, 화면에 절대 표기 금지): ${String(section.name || "").replace(/^S\d+\s*/, "").trim()}`,
       `섹션 목적: ${section.purpose || ""}`,
       `원본 참조: ${section.source || ""}`,
       `사용자 수정 요청: ${requestText}`,
+      "섹션 코드/라벨 금지 규칙: 'S1', 'S2' 같은 섹션 코드나 '문제 공감', '히어로', 'POINT', 'SECTION' 같은 내부 구분용 이름·라벨을 이미지 안 어디에도(배지, 말머리, 제목, 태그, 워터마크) 절대 렌더링하지 않는다. 원본 이미지에 이런 코드/라벨이 남아 있으면 편집 과정에서 제거한다.",
       "브랜드명 금지 규칙: 'phoenix detail page', 'Phoenix Detail Page', 'PHOENIX DETAIL PAGE', 'PD'는 서비스명 또는 도구명일 뿐이며 제품 브랜드가 아니다. 이 단어들을 이미지 안의 제품명, 브랜드명, 로고, 라벨, 헤드라인, 후기, FAQ, CTA, 패키지 텍스트로 절대 사용하지 않는다.",
       "브랜드 사용 규칙: 제품 브랜드명과 제품명은 첨부 이미지 또는 프로젝트 원본에서 확인되는 이름만 사용한다. 확인되지 않는 새 브랜드명, 새 제품명, 새 로고를 만들지 않는다.",
       "편집 규칙: 제품명, 패키지, 핵심 수치, 안전 표현, 원본의 중요한 정보는 유지한다. 근거 없는 성능, 리뷰, 인증, 수치를 새로 만들지 않는다. 한국어 문구는 짧고 명확하게 정리하고, 작은 글씨는 줄인다."
