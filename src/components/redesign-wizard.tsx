@@ -446,6 +446,7 @@ export function RedesignWizard() {
       form.append("channel", channel);
       form.append("ratio", ratio);
       form.append("count", String(outputCount));
+      form.append("totalCount", String(displayCount || outputCount));
       form.append("startSection", String(startSection));
       form.append("rolloutRequest", outputRolloutRequest);
       form.append("openaiKey", openaiKey);

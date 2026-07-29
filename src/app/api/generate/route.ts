@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     const channel = String(form.get("channel") || "스마트스토어");
     const ratio = String(form.get("ratio") || "9:16");
     const count = clamp(Number(form.get("count") || 1), 1, 10);
+    const totalCount = clamp(Number(form.get("totalCount") || count), 1, 10);
     const startSection = clamp(Number(form.get("startSection") || 1), 1, 10);
     const openaiKey = String(form.get("openaiKey") || "");
     const googleKey = String(form.get("googleKey") || "");
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
     console.info(`[generate] analysis start job=${jobId}`);
     const analysis = await analyzeSource({ provider, apiKey, references, payload, modelInfo });
     console.info(`[generate] analysis done job=${jobId}`);
-    const sections = buildSections(count, startSection, payload, analysis, modelInfo);
+    const sections = buildSections(count, startSection, payload, analysis, modelInfo, totalCount);
     const projectTitle = inferProjectTitle(analysis, channel);
 
     const generatedSections = [];
@@ -411,19 +412,39 @@ async function generateGoogleImage({ apiKey, prompt, references }: { apiKey: str
   };
 }
 
+// 총 장수에 따라 모델(인물)이 등장할 섹션 번호 집합을 정한다.
+// 1장 -> 1회(S1), 4장 -> 2회, 8장 -> 3회. 히어로/베네핏/사용 장면 위주로 고르게 배치.
+function modelSectionSet(totalCount: number): Set<number> {
+  const appearances = totalCount <= 1 ? 1 : totalCount <= 4 ? 2 : 3;
+  const priority = [1, 6, 3, 7, 8, 2, 4, 5];
+  const sections = new Set<number>();
+  for (const section of priority) {
+    if (sections.size >= appearances) break;
+    if (section >= 1 && section <= totalCount) sections.add(section);
+  }
+  if (sections.size === 0) sections.add(1);
+  return sections;
+}
+
 function buildSections(
   count: number,
   startSection: number,
   payload: { request: string; rolloutRequest: string; knowledgeText: string; options: { channel: string; ratio: string; count: number } },
   analysis: unknown,
-  modelInfo: ReturnType<typeof modelMeta>
+  modelInfo: ReturnType<typeof modelMeta>,
+  totalCount: number
 ): Section[] {
+  const modelSections = modelSectionSet(totalCount);
   return sectionTemplates(count, startSection).map((template) => {
+    const sectionNumber = Number(template.id.replace(/\D/g, "")) || 1;
+    const modelRule = modelSections.has(sectionNumber)
+      ? `모델/인물 규칙: 전체 ${totalCount}장 중 이 페이지는 모델(인물) 등장이 허용된 페이지다(총 ${modelSections.size}회만 등장). 요청이나 제품 맥락상 모델이 필요하면 이 페이지에만 인물 1명을 사용 장면/라이프스타일 컷으로 자연스럽게 배치한다. 다른 페이지와 같은 포즈·구도·인물을 반복하지 않는다.`
+      : "모델/인물 규칙: 이 페이지에는 모델, 인물, 얼굴, 전신, 착용컷, 손 모델을 새로 넣지 않는다. 제품컷, 카드, 표, 근거 자료 중심으로 구성한다.";
     const promptText = [
       "너는 커머스 상세페이지 리디자인 이미지 생성 엔진이다.",
       `이미지 생성 모델: ${modelInfo.label} (${modelInfo.id})`,
       ratioPromptInstruction(payload.options.ratio),
-      `섹션: ${template.name}`,
+      `섹션: ${template.name} (전체 ${totalCount}장 중 ${sectionNumber}번째)`,
       `목적: ${template.purpose}`,
       `원본 참조: ${template.source}`,
       `권장 레이아웃: ${template.layout}`,
@@ -434,8 +455,11 @@ function buildSections(
       `분석 요약: ${JSON.stringify(analysis).slice(0, 2400)}`,
       "브랜드명 금지 규칙: 'phoenix detail page', 'Phoenix Detail Page', 'PHOENIX DETAIL PAGE', 'PD'는 서비스명 또는 도구명일 뿐이며 제품 브랜드가 아니다. 이 단어들을 이미지 안의 제품명, 브랜드명, 로고, 라벨, 헤드라인, 후기, FAQ, CTA, 패키지 텍스트로 절대 사용하지 않는다.",
       "브랜드 사용 규칙: 제품 브랜드명과 제품명은 업로드된 원본 상세페이지 또는 제품 패키지에서 확인되는 이름만 사용한다. 원본에서 확인되지 않는 새 브랜드명, 새 제품명, 새 로고를 만들지 않는다.",
-      "전체 연결 규칙: 8장을 이어 붙였을 때 하나의 상세페이지처럼 보여야 한다. 동일한 브랜드 색, 폰트 감각, 제품 사진 톤은 유지하되 각 섹션의 레이아웃은 반드시 다르게 구성한다. 모든 섹션이 큰 상단 헤드라인+중앙 제품컷으로 반복되면 안 된다.",
-      "섹션별 변화 규칙: 제품 위치, 정보 카드 모양, 아이콘 밀도, 배경 분할, CTA 위치, 타이포 크기 리듬을 섹션마다 다르게 한다. 같은 헤드라인 문구를 반복하지 말고, 섹션 목적에 맞는 새로운 제목을 쓴다.",
+      "전체 연결 규칙: 여러 장을 이어 붙였을 때 하나의 상세페이지처럼 보여야 한다. 동일한 브랜드 색, 폰트 감각, 제품 사진 톤은 유지하되 각 섹션의 레이아웃은 반드시 다르게 구성한다. 모든 섹션이 큰 상단 헤드라인+중앙 제품컷으로 반복되면 안 된다.",
+      "중복 금지 규칙: 다른 페이지에서 이미 쓴 헤드라인, 특징 카드 세트(예: 최상급 원료·장인의 손길·풍미·패키지 같은 핵심 강점 나열), 아이콘 묶음, 문장을 그대로 반복하지 않는다. 이 페이지는 이 섹션 목적에 해당하는 새로운 소주제 하나에만 집중하고, 앞 페이지 내용을 요약·재나열하지 않는다.",
+      "아이콘 절제 규칙: 아이콘을 남발하지 않는다. 한 페이지에 아이콘은 꼭 필요한 곳에만 최대 3개까지만 쓰고, 모든 항목·모든 카드마다 아이콘을 붙이지 않는다. 아이콘 없이 타이포와 여백만으로 정리되는 구성을 우선한다.",
+      "상하 여백 규칙: 페이지 맨 위와 맨 아래에 넉넉한 여백을 확보한다. 헤드라인·제품컷·CTA가 위아래 가장자리에 바짝 붙지 않게 하고, 상단과 하단에 각각 화면 높이의 최소 8~10%를 빈 여백으로 남긴다.",
+      modelRule,
       "안전 규칙: 원본 제품컷/색감/핵심 정보는 보존한다. 근거 없는 수치, 리뷰, 인증, 효과를 만들지 않는다. 한 장에 메시지 하나만 담는다. 한국어 문구는 크게, 불릿은 3개 이하로 배치한다. 복잡한 배경과 작은 글씨를 피한다. 규제 리스크가 있으면 안전한 표현으로 완화한다.",
       template.id === "S1"
         ? "히어로 전용 금지 규칙: 히어로(첫 장) 하단에 '지금 구매하세요', '구매하기', 'BUY NOW', '주문하기' 등 구매 유도 버튼이나 버튼 형태의 구매 CTA를 절대 넣지 않는다. 하단은 핵심 약속/USP 배지로만 마무리한다."
