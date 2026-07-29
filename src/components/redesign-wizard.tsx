@@ -40,7 +40,8 @@ import {
   upsertProject,
   listCloudProjects,
   loadCloudProject,
-  renameCloudProject
+  renameCloudProject,
+  uploadReferenceFilesToStorage
 } from "@/lib/cloud-sync";
 
 type Model = "openai" | "google";
@@ -430,7 +431,15 @@ export function RedesignWizard() {
             .join("\n\n")
             .slice(0, 60000)
         : "";
-      uploadFiles.forEach((file) => form.append("files", file));
+      // 큰 원본은 Supabase Storage에 직접 올려 Vercel 요청 본문 한도(4.5MB)를 우회한다.
+      // 스토리지가 없거나 업로드에 실패하면 기존 직접 전송 방식으로 자동 폴백한다.
+      const storagePaths = await uploadReferenceFilesToStorage(uploadFiles);
+      if (abortController.signal.aborted) throw new DOMException("생성 요청을 취소했습니다.", "AbortError");
+      if (storagePaths && storagePaths.length > 0) {
+        form.append("storagePaths", JSON.stringify(storagePaths));
+      } else {
+        uploadFiles.forEach((file) => form.append("files", file));
+      }
       form.append("knowledgeText", knowledgeText);
       form.append("useKnowledge", String(useSharedKnowledge));
       form.append("knowledgeAccessKey", knowledgeAccessKey);

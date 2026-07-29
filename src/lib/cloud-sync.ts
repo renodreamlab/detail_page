@@ -119,3 +119,35 @@ export async function deleteCloudProject(localId: string): Promise<void> {
   if (!sb) return;
   await sb.from("projects").delete().eq("local_id", localId);
 }
+
+// 업로드 원본을 Supabase Storage로 직접 올려 Vercel 요청 본문 한도(4.5MB)를 우회한다.
+// 실패 시 null을 반환해 호출부가 기존 직접 전송 방식으로 폴백할 수 있게 한다.
+export async function uploadReferenceFilesToStorage(files: File[]): Promise<string[] | null> {
+  const supabase = getSupabase();
+  if (!supabase || files.length === 0) return null;
+
+  try {
+    const response = await fetch("/api/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ files: files.map((file) => ({ name: file.name, type: file.type, size: file.size })) })
+    });
+    if (!response.ok) return null;
+
+    const data = await response.json();
+    const uploads = data?.uploads;
+    if (!Array.isArray(uploads) || uploads.length !== files.length) return null;
+
+    for (let index = 0; index < files.length; index += 1) {
+      const { path, token } = uploads[index] || {};
+      if (!path || !token) return null;
+      const { error } = await supabase.storage
+        .from("uploads")
+        .uploadToSignedUrl(path, token, files[index], { contentType: files[index].type || "image/jpeg" });
+      if (error) return null;
+    }
+    return uploads.map((upload: { path: string }) => upload.path);
+  } catch {
+    return null;
+  }
+}
