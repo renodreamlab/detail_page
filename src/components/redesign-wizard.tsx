@@ -1668,7 +1668,7 @@ function Dashboard({
                 <CardTitle>최근 제작 작업</CardTitle>
                 <CardDescription>업로드한 원본 자료를 기준으로 만든 이미지 작업 목록</CardDescription>
             </div>
-            <Badge variant="green">6~8장 기본</Badge>
+            <Badge variant="green">1 · 4 · 8장</Badge>
           </CardHeader>
           <CardContent className="grid gap-3">
             {projects.length > 0 ? (

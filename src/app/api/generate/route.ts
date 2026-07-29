@@ -243,7 +243,7 @@ async function analyzeSource({
     return {
       product_inferred: { category: "업로드 자료 기반 추정", confidence: 0.4 },
       diagnostic_summary: `AI 분석 호출 실패: ${error instanceof Error ? error.message : "unknown"}`,
-      strategy: "원본 자료의 제품컷/USP/근거를 보존하고, 6~8장 섹션 구조로 전환 설계를 적용합니다.",
+      strategy: "원본 자료의 제품컷/USP/근거를 보존하고, 선택한 장수(1~8장)에 맞춰 섹션 구조로 전환 설계를 적용합니다.",
       page_blueprint: [],
       compliance_notes: "근거 없는 수치, 리뷰, 인증, 효과 표현은 생성하지 않습니다."
     };
