@@ -1947,8 +1947,8 @@ function Workspace(props: {
               </div>
             </CardHeader>
             <CardContent className="grid gap-4">
-              <OptionGroup label="결과 장수" value={String(count)} options={[["1", "히어로 1장"], ["8", "기본 6~8장"]]} onChange={(value) => setCount(Number(value))} />
-              <OptionGroup label="출력 비율" value={ratio} options={[["9:16", "9:16 상세"], ["4:5", "4:5 피드"], ["1:1", "1:1 정사각"]]} onChange={setRatio} />
+              <OptionGroup label="생성 페이지" value={String(count)} options={[["1", "1장(히어로)"], ["4", "4장(심플)"], ["8", "8장(상세)"]]} onChange={(value) => setCount(Number(value))} />
+              <RatioOptionGroup value={ratio} onChange={setRatio} />
               <ChannelOptionGroup value={channel} onChange={setChannel} />
             </CardContent>
           </Card>
@@ -2514,7 +2514,7 @@ function OptionGroup({
   return (
     <div>
       <label className="mb-2 block text-xs font-bold text-muted-foreground">{label}</label>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${Math.max(options.length, 1)}, minmax(0, 1fr))` }}>
         {options.map(([optionValue, optionLabel]) => (
           <button
             key={optionValue}
@@ -2524,6 +2524,61 @@ function OptionGroup({
             {optionLabel}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+const ratioOptions = [
+  {
+    value: "9:16",
+    label: "9:16(상세)",
+    title: "상세페이지 생성 기본값",
+    description: "모바일 상세페이지 본문, 스마트스토어/쿠팡/자사몰 섹션처럼 위에서 아래로 읽는 긴 정보 흐름에 최적입니다."
+  },
+  {
+    value: "1:1",
+    label: "1:1(정사각)",
+    title: "썸네일/카드뉴스/보조 이미지",
+    description: "상품 보조컷, SNS 카드뉴스, 광고 썸네일처럼 제품과 짧은 혜택 문구를 안정적으로 보여줄 때 적합합니다."
+  },
+  {
+    value: "4:5",
+    label: "4:5(피드)",
+    title: "광고/SNS 피드 소재",
+    description: "인스타그램·메타 광고, 모바일 피드형 소재처럼 1:1보다 조금 더 여유 있는 세로 카드에 적합합니다."
+  }
+];
+
+function RatioOptionGroup({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <div>
+      <label className="mb-2 block text-xs font-bold text-muted-foreground">출력 비율</label>
+      <div className="grid gap-2">
+        {ratioOptions.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              className={cn(
+                "rounded-md border border-border bg-white p-3 text-left transition hover:border-[#ff9f7a] hover:bg-[#fff8f5]",
+                selected && "border-[#101726] bg-[#101726] text-white shadow-sm hover:border-[#101726] hover:bg-[#101726] hover:text-white"
+              )}
+              onClick={() => onChange(option.value)}
+            >
+              <span className="flex items-center justify-between gap-3">
+                <strong className="text-sm">{option.label}</strong>
+                <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black", selected ? "bg-[#ffd36a] text-[#101726]" : "bg-[#fff3ee] text-[#0f766e]")}>
+                  {option.title}
+                </span>
+              </span>
+              <span className={cn("mt-1 block text-[11px] leading-relaxed", selected ? "text-white/78" : "text-muted-foreground")}>
+                {option.description}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
