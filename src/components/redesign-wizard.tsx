@@ -125,8 +125,6 @@ type ServerConfig = {
 const knowledgeStorageKey = "phoenix-detail-page-knowledge-items";
 const projectDbName = "phoenix-detail-page-redesign-projects";
 const projectStoreName = "projects";
-const phoenixPortalUrl = "https://phoenix-portal.site/";
-const phoenixPromoImage = "/phoenix-web-promo.png";
 
 const models = {
   openai: {
@@ -1061,7 +1059,6 @@ export function RedesignWizard() {
           modelLabel={models[generationPlan.model].label}
           count={generationPlan.displayCount || generationPlan.count}
           currentIndex={generationPlan.displayIndex || 1}
-          showPhoenixWebPromo={Boolean(generationPlan.showPhoenixWebPromo)}
           onCancel={cancelGeneration}
         />
       )}
@@ -2360,14 +2357,12 @@ function GenerationProgressPanel({
   modelLabel,
   count,
   currentIndex,
-  showPhoenixWebPromo,
   onCancel
 }: {
   progress: GenerationProgress;
   modelLabel: string;
   count: number;
   currentIndex: number;
-  showPhoenixWebPromo: boolean;
   onCancel: () => void;
 }) {
   const isWaiting = progress.percent >= 96;
@@ -2417,37 +2412,6 @@ function GenerationProgressPanel({
             요청 취소
           </Button>
         </div>
-        {showPhoenixWebPromo ? (
-          <div className="mt-4 rounded-md border border-border bg-white p-3">
-            <div className="mb-2 flex items-center justify-between gap-3 max-sm:flex-col max-sm:items-start">
-              <div>
-                <p className="text-sm font-bold">phoenix web 으로 이동</p>
-                <p className="mt-1 text-xs text-muted-foreground">이미지를 클릭하면 피닉스 포털로 이동합니다.</p>
-              </div>
-              <a
-                href={phoenixPortalUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-h-8 items-center rounded-md bg-foreground px-3 text-xs font-bold text-background transition hover:opacity-85"
-              >
-                phoenix web 으로 이동
-              </a>
-            </div>
-            <a
-              href={phoenixPortalUrl}
-              target="_blank"
-              rel="noreferrer"
-              aria-label="phoenix web 으로 이동"
-              className="block overflow-hidden rounded-md border border-border bg-foreground transition hover:opacity-90"
-            >
-              <img
-                className="h-full w-full"
-                src={phoenixPromoImage}
-                alt="phoenix web"
-              />
-            </a>
-          </div>
-        ) : null}
       </div>
     </div>
   );
