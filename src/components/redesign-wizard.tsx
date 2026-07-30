@@ -1196,6 +1196,13 @@ async function deleteProjectFromDb(projectId: string) {
   });
 }
 
+function pageCountLabel(count: number) {
+  if (count === 1) return "1장(히어로)";
+  if (count === 4) return "4장(심플)";
+  if (count === 8) return "8장(상세)";
+  return `${count}장`;
+}
+
 function projectDisplayTitle(project: Partial<Project>) {
   const inferred = inferTitleFromAnalysis(project.analysis);
   if (inferred) return inferred;
@@ -1668,11 +1675,7 @@ function Dashboard({
                 <CardTitle>최근 제작 작업</CardTitle>
                 <CardDescription>업로드한 원본 자료를 기준으로 만든 이미지 작업 목록</CardDescription>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="green">1장(히어로)</Badge>
-              <Badge variant="green">4장(심플)</Badge>
-              <Badge variant="green">8장(상세)</Badge>
-            </div>
+            {projects.length > 0 ? <Badge variant="green">{pageCountLabel(projects[0].count)}</Badge> : null}
           </CardHeader>
           <CardContent className="grid gap-3">
             {projects.length > 0 ? (
