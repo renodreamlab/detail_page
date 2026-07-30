@@ -761,8 +761,8 @@ export function RedesignWizard() {
           aria-label="홈보드로 이동"
         >
           <span className="min-w-0">
-            <span className="block text-base font-extrabold leading-none tracking-tight">
-              <span className="text-[#ff6f61]">RENO</span><span className="text-black">ABLE</span>
+            <span className="block text-base font-extrabold leading-none tracking-[0.02em]">
+              <span className="text-[#ff6f61]">RENO</span><span className="text-black">ABLE</span><span className="ml-1.5 font-medium text-black">STUDIO</span>
             </span>
             <span className="mt-1 block text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Detail Page Maker</span>
           </span>
