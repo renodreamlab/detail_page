@@ -2342,7 +2342,7 @@ function SectionResultCard({
                   type="button"
                   variant="accent"
                   size="sm"
-                  className="px-2"
+                  className="px-2 border-[#8fd3da] bg-[#e4f6f7] text-[#0e7490] hover:border-[#8fd3da] hover:bg-[#d3eef1] hover:text-[#0e7490]"
                   onClick={() => generateAiComment(label, text)}
                   disabled={disabled || Boolean(aiCommentPreset)}
                   title={`${label} AI 멘트 생성`}
