@@ -1829,7 +1829,15 @@ function Workspace(props: {
           <Card>
             <CardHeader>
               <div>
-                <CardTitle>원본 자료 가져오기</CardTitle>
+                <CardTitle className="flex flex-wrap items-center gap-1.5">
+                  원본 자료 가져오기
+                  <InfoTip label="업로드 규칙 안내">
+                    <strong>여러 장 업로드 가능, 용량 제한 없음</strong> (자동 압축 후 안전하게 전송됩니다)
+                    <br />· 생성 참조로는 최대 <strong>4장</strong>이 사용됩니다
+                    <br />· 이미지와 PDF를 함께 올릴 수 있으며, PDF는 페이지 이미지로 변환해 사용합니다
+                    <br />· 원본의 제품컷·수치·리뷰·인증·오퍼 문구를 최대한 보존합니다
+                  </InfoTip>
+                </CardTitle>
                 <CardDescription>이미지 또는 PDF를 첨부하면 원본 정보와 전환 저해 요소를 분석합니다.</CardDescription>
               </div>
               <Badge variant="green">대용량 가능</Badge>
@@ -2566,6 +2574,39 @@ function RatioOptionGroup({ value, onChange }: { value: string; onChange: (value
         })}
       </div>
     </div>
+  );
+}
+
+function InfoTip({ label, align = "center", children }: { label: string; align?: "center" | "right"; children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+
+  return (
+    <span className="relative inline-flex align-middle">
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#bfeee7] bg-[#f4fbf9] px-2 py-0.5 text-[11px] font-semibold text-[#0f766e] transition hover:border-[#0f766e] hover:bg-[#e9fbf7] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#99e5d8]"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onClick={() => setOpen((current) => !current)}
+        onBlur={() => setOpen(false)}
+      >
+        <CircleHelp className="size-3" />
+        상세 안내
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          className={cn(
+            "absolute top-full z-50 mt-2 w-72 rounded-md border border-border bg-white p-3 text-left text-xs font-normal leading-relaxed text-foreground shadow-lg",
+            align === "right" ? "right-0" : "left-1/2 -translate-x-1/2"
+          )}
+        >
+          {children}
+        </span>
+      )}
+    </span>
   );
 }
 
