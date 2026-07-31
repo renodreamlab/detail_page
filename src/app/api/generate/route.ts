@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { canUseCommonKnowledge } from "@/lib/knowledge-access";
 import { isRagConfigured, retrieveKnowledge } from "@/lib/rag";
 import { openAIImageSizeForRatio, ratioPromptInstruction } from "@/lib/image-spec";
+import { getUserFromRequest, getProfile, applyCredits, serverImageKeyFor } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -62,15 +63,32 @@ export async function POST(request: NextRequest) {
     const startSection = clamp(Number(form.get("startSection") || 1), 1, 10);
     const openaiKey = String(form.get("openaiKey") || "");
     const googleKey = String(form.get("googleKey") || "");
-    const apiKey = provider === "google" ? googleKey : openaiKey;
+    const clientKey = provider === "google" ? googleKey : openaiKey;
 
-    console.info(`[generate] request provider=${provider} count=${count} startSection=${startSection} files=${files.length} channel=${channel}`);
+    // 크레딧 모드: 로그인 사용자 + 서버 키가 있으면 서버 키로 생성하고 성공 장수만큼 차감.
+    // 미로그인/서버 키 미설정이면 기존 본인 키 방식 유지(하위 호환).
+    const user = await getUserFromRequest(request);
+    const serverKey = serverImageKeyFor(provider);
+    const chargeCredits = Boolean(user && serverKey);
+    const apiKey = chargeCredits ? serverKey : clientKey;
+
+    console.info(`[generate] request provider=${provider} count=${count} startSection=${startSection} files=${files.length} channel=${channel} creditMode=${chargeCredits}`);
 
     if (!apiKey) {
       return NextResponse.json(
         { error: provider === "google" ? "Google Nano Banana 2 API 키가 필요합니다." : "OpenAI Image 2.0 API 키가 필요합니다." },
         { status: 400 }
       );
+    }
+
+    if (chargeCredits) {
+      const profile = await getProfile(user!.id);
+      if (profile.credits < count) {
+        return NextResponse.json(
+          { error: `크레딧이 부족합니다. (필요 ${count}, 보유 ${profile.credits}) 충전 후 이용해주세요.` },
+          { status: 402 }
+        );
+      }
     }
 
     if (files.length === 0 && storagePaths.length === 0) {
@@ -140,7 +158,25 @@ export async function POST(request: NextRequest) {
 
     console.info(`[generate] complete provider=${provider} generated=${generatedSections.length} failed=${failedSections.length}`);
 
+    // 성공한 장수만큼만 차감한다. 실패분은 청구하지 않는다.
+    let creditsRemaining: number | null = null;
+    if (chargeCredits && generatedSections.length > 0) {
+      try {
+        creditsRemaining = await applyCredits(
+          user!.id,
+          -generatedSections.length,
+          `이미지 생성 ${generatedSections.length}장`,
+          "image",
+          jobId
+        );
+      } catch (error) {
+        console.error(`[generate] credit charge failed job=${jobId}`, error);
+      }
+    }
+
     return NextResponse.json({
+      creditMode: chargeCredits,
+      creditsRemaining,
       project: {
         id: jobId,
         title: projectTitle,

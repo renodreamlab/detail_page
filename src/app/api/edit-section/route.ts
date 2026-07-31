@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { openAIImageSizeForRatio, ratioEditPromptInstruction } from "@/lib/image-spec";
+import { getUserFromRequest, getProfile, applyCredits, serverImageKeyFor } from "@/lib/credits";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -29,14 +30,30 @@ export async function POST(request: NextRequest) {
     const project = body.project || {};
     const openaiKey = String(body.openaiKey || "");
     const googleKey = String(body.googleKey || "");
-    const apiKey = provider === "google" ? googleKey : openaiKey;
+    const clientKey = provider === "google" ? googleKey : openaiKey;
     const ratio = String(project.ratio || "9:16");
+
+    // 크레딧 모드: 로그인 + 서버 키가 있으면 서버 키로 편집하고 성공 시 1크레딧 차감.
+    const user = await getUserFromRequest(request);
+    const serverKey = serverImageKeyFor(provider);
+    const chargeCredits = Boolean(user && serverKey);
+    const apiKey = chargeCredits ? serverKey : clientKey;
 
     if (!apiKey) {
       return NextResponse.json(
         { error: provider === "google" ? "Google Nano Banana 2 API 키가 필요합니다." : "OpenAI Image 2.0 API 키가 필요합니다." },
         { status: 400 }
       );
+    }
+
+    if (chargeCredits) {
+      const profile = await getProfile(user!.id);
+      if (profile.credits < 1) {
+        return NextResponse.json(
+          { error: `크레딧이 부족합니다. (필요 1, 보유 ${profile.credits}) 충전 후 이용해주세요.` },
+          { status: 402 }
+        );
+      }
     }
     if (!image) {
       return NextResponse.json({ error: "수정할 섹션 이미지가 없습니다." }, { status: 400 });
@@ -65,11 +82,23 @@ export async function POST(request: NextRequest) {
       ? await editWithGoogle({ apiKey, prompt, image })
       : await editWithOpenAI({ apiKey, prompt, image, ratio });
 
+    // 성공한 편집에만 1크레딧 차감. 실패분은 청구하지 않는다.
+    let creditsRemaining: number | null = null;
+    if (chargeCredits) {
+      try {
+        creditsRemaining = await applyCredits(user!.id, -1, "섹션 부분 편집 1장", "image", String(section.id || ""));
+      } catch (error) {
+        console.error("[edit-section] credit charge failed", error);
+      }
+    }
+
     return NextResponse.json({
       imageUrl: `data:${edited.mimeType};base64,${edited.buffer.toString("base64")}`,
       mimeType: edited.mimeType,
       prompt,
-      warning: edited.fallbackNotice || ""
+      warning: edited.fallbackNotice || "",
+      creditMode: chargeCredits,
+      creditsRemaining
     });
   } catch (error) {
     console.error("[api/edit-section]", error);

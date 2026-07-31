@@ -85,6 +85,14 @@ export async function getCurrentUser(): Promise<User | null> {
   return user;
 }
 
+// 서버 라우트에 로그인 사용자를 증명할 액세스 토큰 (크레딧 차감·잔액 조회용).
+export async function getAccessToken(): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  const { data: { session } } = await sb.auth.getSession();
+  return session?.access_token ?? null;
+}
+
 export async function upsertProject(project: CloudProjectRow): Promise<void> {
   const sb = getSupabase();
   if (!sb) return;

@@ -44,6 +44,7 @@ import {
   deleteCloudProject,
   resolveSectionImages,
   uploadReferenceFilesToStorage,
+  getAccessToken,
   type CloudSection
 } from "@/lib/cloud-sync";
 
@@ -285,6 +286,7 @@ export function RedesignWizard() {
   const [toast, setToast] = React.useState("");
   const [rolloutRequest, setRolloutRequest] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("idle");
+  const [credits, setCredits] = React.useState<number | null>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const knowledgeInputRef = React.useRef<HTMLInputElement>(null);
   const generationAbortRef = React.useRef<AbortController | null>(null);
@@ -293,6 +295,31 @@ export function RedesignWizard() {
   React.useEffect(() => {
     return onAuthChange(setCloudUser);
   }, []);
+
+  // 로그인하면 크레딧 잔액을 불러온다. 생성/편집 응답의 creditsRemaining으로도 갱신된다.
+  const refreshCredits = React.useCallback(async () => {
+    try {
+      const token = await getAccessToken();
+      if (!token) {
+        setCredits(null);
+        return;
+      }
+      const response = await fetch("/api/credits", { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (typeof data.credits === "number") setCredits(data.credits);
+    } catch {
+      // 잔액 조회 실패는 조용히 무시 (생성 자체를 막지 않는다)
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!cloudUser) {
+      setCredits(null);
+      return;
+    }
+    refreshCredits();
+  }, [cloudUser, refreshCredits]);
 
   React.useEffect(() => {
     const initial = loadProjects();
@@ -403,7 +430,10 @@ export function RedesignWizard() {
       return null;
     }
 
-    const hasKey = selectedModel === "openai" ? Boolean(openaiKey) : Boolean(googleKey);
+    // 로그인 + 서버 키 설정 환경이면 본인 키 없이 크레딧으로 생성한다.
+    const serverKeyAvailable = Boolean(cloudUser) &&
+      (selectedModel === "openai" ? serverConfig.serverOpenaiKeyConfigured : serverConfig.serverGoogleKeyConfigured);
+    const hasKey = serverKeyAvailable || (selectedModel === "openai" ? Boolean(openaiKey) : Boolean(googleKey));
     if (!hasKey) {
       setToast(`${models[selectedModel].label} API 키를 먼저 설정해주세요.`);
       setSettingsOpen(true);
@@ -484,12 +514,15 @@ export function RedesignWizard() {
       form.append("openaiKey", openaiKey);
       form.append("googleKey", googleKey);
 
+      const accessToken = await getAccessToken();
       const response = await fetch("/api/generate", {
         method: "POST",
         body: form,
-        signal: abortController.signal
+        signal: abortController.signal,
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
       });
       const data = await readApiResponse(response);
+      if (typeof data.creditsRemaining === "number") setCredits(data.creditsRemaining);
       reportClientLog("generate:response", {
         ok: response.ok,
         status: response.status,
@@ -776,7 +809,9 @@ export function RedesignWizard() {
       setToast("저장된 이미지가 없는 섹션은 수정할 수 없습니다. 다시 생성한 뒤 시도해주세요.");
       return;
     }
-    const hasKey = model === "openai" ? Boolean(openaiKey) : Boolean(googleKey);
+    const editServerKeyAvailable = Boolean(cloudUser) &&
+      (model === "openai" ? serverConfig.serverOpenaiKeyConfigured : serverConfig.serverGoogleKeyConfigured);
+    const hasKey = editServerKeyAvailable || (model === "openai" ? Boolean(openaiKey) : Boolean(googleKey));
     if (!hasKey) {
       setToast(`${models[model].label} API 키를 먼저 설정해주세요.`);
       setSettingsOpen(true);
@@ -801,9 +836,13 @@ export function RedesignWizard() {
         sectionId,
         imageBytes: estimateDataUrlBytes(requestImageUrl)
       });
+      const accessToken = await getAccessToken();
       const response = await fetch("/api/edit-section", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+        },
         body: JSON.stringify({
           model,
           imageUrl: requestImageUrl,
@@ -816,6 +855,7 @@ export function RedesignWizard() {
         signal: abortController.signal
       });
       const data = await readApiResponse(response);
+      if (typeof data.creditsRemaining === "number") setCredits(data.creditsRemaining);
       if (!response.ok) throw new Error(data.error || "섹션 수정 실패");
 
       const updatedProject: Project = {
@@ -907,6 +947,12 @@ export function RedesignWizard() {
               <span className="min-w-0 flex-1 truncate">맞춤형 Data 설정</span>
               <Badge className="shrink-0 whitespace-nowrap" variant={serverConfig.knowledgeConfigured ? "solidBlue" : "solidGray"}>{serverConfig.knowledgeConfigured ? "설정됨" : "미설정"}</Badge>
             </div>
+            {cloudUser && credits !== null ? (
+              <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5">
+                <span className="min-w-0 flex-1 truncate">내 크레딧</span>
+                <Badge className="shrink-0 whitespace-nowrap" variant={credits > 0 ? "solidBlue" : "solidGray"}>{credits}개</Badge>
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       </aside>
