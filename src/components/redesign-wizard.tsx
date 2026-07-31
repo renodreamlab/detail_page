@@ -287,6 +287,7 @@ export function RedesignWizard() {
   const [rolloutRequest, setRolloutRequest] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("idle");
   const [credits, setCredits] = React.useState<number | null>(null);
+  const [isAdmin, setIsAdmin] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const knowledgeInputRef = React.useRef<HTMLInputElement>(null);
   const generationAbortRef = React.useRef<AbortController | null>(null);
@@ -308,6 +309,7 @@ export function RedesignWizard() {
       if (!response.ok) return;
       const data = await response.json();
       if (typeof data.credits === "number") setCredits(data.credits);
+      if (typeof data.isAdmin === "boolean") setIsAdmin(data.isAdmin);
     } catch {
       // 잔액 조회 실패는 조용히 무시 (생성 자체를 막지 않는다)
     }
@@ -928,6 +930,15 @@ export function RedesignWizard() {
               <span className={cn("text-[11px] font-black text-muted-foreground transition group-hover:text-foreground", view === id && "text-[#ffd36a] group-hover:text-[#ffd36a]")}>{index}</span>
             </button>
           ))}
+          {isAdmin ? (
+            <a
+              href="/admin"
+              className="group relative flex h-11 items-center justify-between overflow-hidden rounded-md border border-transparent px-3 text-left text-sm font-semibold text-muted-foreground transition hover:border-border hover:bg-white/75 hover:text-foreground"
+            >
+              <span className="pl-2">관리자</span>
+              <span className="rounded bg-neutral-900 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">Admin</span>
+            </a>
+          ) : null}
         </nav>
         <Card className="mt-5 border-white/70 bg-white/72 shadow-[0_14px_34px_rgba(16,23,38,0.07)]">
           <CardContent className="space-y-3 p-3 text-[11px]">
