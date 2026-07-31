@@ -61,6 +61,8 @@ type SectionResult = {
   imageUrl?: string;
   // 클라우드 Storage 경로. 있으면 imageUrl은 만료되는 서명 URL이므로 열 때마다 재서명한다.
   imagePath?: string;
+  // 모션(시네마그래프) 결과 MP4 URL (fal CDN)
+  motionUrl?: string;
   revisions?: SectionRevision[];
 };
 
@@ -87,6 +89,8 @@ type Project = {
   sections: SectionResult[];
   analysis?: unknown;
   savedAt?: string;
+  // 홍보영상 결과 MP4 URL (로컬 보관)
+  promoVideoUrl?: string;
 };
 
 type KnowledgeItem = {
@@ -241,6 +245,7 @@ export function RedesignWizard() {
   );
   const [openaiKey, setOpenaiKey] = React.useState("");
   const [googleKey, setGoogleKey] = React.useState("");
+  const [falKey, setFalKey] = React.useState("");
   const [serverConfig, setServerConfig] = React.useState<ServerConfig>({
     serverOpenaiKeyConfigured: false,
     serverGoogleKeyConfigured: false,
@@ -334,6 +339,7 @@ export function RedesignWizard() {
     setActiveProject(initial[0] ?? null);
     setOpenaiKey(localStorage.getItem("phoenix-detail-page-openai-key") || "");
     setGoogleKey(localStorage.getItem("phoenix-detail-page-google-key") || "");
+    setFalKey(localStorage.getItem("phoenix-detail-page-fal-key") || "");
     setUseSharedKnowledge(localStorage.getItem("phoenix-detail-page-use-shared-knowledge") === "true");
     setKnowledgeAccessKey(localStorage.getItem("phoenix-detail-page-knowledge-access-key") || "");
     setKnowledgeAdminKey(localStorage.getItem("phoenix-detail-page-knowledge-admin-key") || "");
@@ -619,10 +625,13 @@ export function RedesignWizard() {
   function saveSettings() {
     const nextOpenaiKey = openaiKey.trim();
     const nextGoogleKey = googleKey.trim();
+    const nextFalKey = falKey.trim();
     localStorage.setItem("phoenix-detail-page-openai-key", nextOpenaiKey);
     localStorage.setItem("phoenix-detail-page-google-key", nextGoogleKey);
+    localStorage.setItem("phoenix-detail-page-fal-key", nextFalKey);
     setOpenaiKey(nextOpenaiKey);
     setGoogleKey(nextGoogleKey);
+    setFalKey(nextFalKey);
     setSettingsOpen(false);
     setToast("API 키 설정을 저장했습니다.");
   }
@@ -630,8 +639,10 @@ export function RedesignWizard() {
   function clearSettings() {
     localStorage.removeItem("phoenix-detail-page-openai-key");
     localStorage.removeItem("phoenix-detail-page-google-key");
+    localStorage.removeItem("phoenix-detail-page-fal-key");
     setOpenaiKey("");
     setGoogleKey("");
+    setFalKey("");
     setToast("저장된 API 키를 삭제했습니다.");
   }
 
@@ -893,6 +904,121 @@ export function RedesignWizard() {
     }
   }
 
+  const [motionSectionId, setMotionSectionId] = React.useState<string | null>(null);
+  const [promoBusy, setPromoBusy] = React.useState(false);
+
+  // 영상 요청 공통 헤더: 로그인 토큰 + (수강생이면) 본인 fal 키를 헤더로만 전달
+  async function videoHeaders(): Promise<Record<string, string>> {
+    const token = await getAccessToken();
+    if (!token) throw new Error("영상 기능은 로그인 후 이용할 수 있습니다.");
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(accountType === "student" && falKey.trim() ? { "x-fal-key": falKey.trim() } : {})
+    };
+  }
+
+  // 영상 입력 이미지: 4.5MB 요청 한도 안이면 원본 화질 유지, 크면 압축
+  async function videoImageUrl(imageUrl: string): Promise<string> {
+    if (imageUrl.startsWith("data:") && estimateDataUrlBytes(imageUrl) < 3_500_000) return imageUrl;
+    return compressImageForRequest(imageUrl);
+  }
+
+  async function pollVideo(path: string, requestId: string, headers: Record<string, string>, extraQuery = "") {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const response = await fetch(`${path}?requestId=${encodeURIComponent(requestId)}${extraQuery}`, { headers });
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(data.error || "영상 상태 조회에 실패했습니다.");
+      if (data.status === "COMPLETED") return data as { videoUrl: string; creditsRemaining: number | null };
+      if (data.status === "FAILED") throw new Error("영상 생성에 실패했습니다. 크레딧은 차감되지 않았습니다.");
+    }
+    throw new Error("영상 생성 대기 시간이 초과됐습니다. 잠시 후 다시 시도해주세요.");
+  }
+
+  // 섹션 모션(시네마그래프) 생성
+  async function generateMotion(sectionId: string, preset: string) {
+    const project = currentProject;
+    const section = project?.sections.find((candidate) => candidate.id === sectionId);
+    if (!project || !section?.imageUrl) {
+      setToast("모션을 적용할 이미지가 없습니다.");
+      return;
+    }
+
+    setMotionSectionId(sectionId);
+    setToast("모션 영상 작업을 제출하고 있습니다.");
+    try {
+      const headers = await videoHeaders();
+      const submitResponse = await fetch("/api/motion", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ imageUrl: await videoImageUrl(section.imageUrl), preset })
+      });
+      const submitData = await readApiResponse(submitResponse);
+      if (!submitResponse.ok) throw new Error(submitData.error || "모션 작업 제출에 실패했습니다.");
+
+      setToast("모션 영상 생성 중입니다. 보통 1~3분 걸립니다.");
+      const result = await pollVideo("/api/motion", submitData.requestId, headers);
+      if (typeof result.creditsRemaining === "number") setCredits(result.creditsRemaining);
+
+      const updatedProject: Project = {
+        ...project,
+        sections: project.sections.map((candidate) => (
+          candidate.id === sectionId ? { ...candidate, motionUrl: result.videoUrl } : candidate
+        ))
+      };
+      setActiveProject(updatedProject);
+      setProjects((current) => [updatedProject, ...current.filter((candidate) => candidate.id !== updatedProject.id)].slice(0, 20));
+      scheduleAutoSave(updatedProject);
+      setToast(`${section.name} 모션 완성! 카드의 '모션 재생'으로 확인하세요.`);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "모션 생성 중 오류가 발생했습니다.");
+    } finally {
+      setMotionSectionId(null);
+    }
+  }
+
+  // 홍보영상: 히어로(첫 섹션) 이미지 기반
+  async function generatePromoVideo(resolution: "720p" | "1080p") {
+    const project = currentProject;
+    const heroSection = project?.sections.find((candidate) => candidate.imageUrl);
+    if (!project || !heroSection?.imageUrl) {
+      setToast("홍보영상에 사용할 이미지가 없습니다.");
+      return;
+    }
+
+    setPromoBusy(true);
+    setToast(`홍보영상(${resolution}) 작업을 제출하고 있습니다.`);
+    try {
+      const headers = await videoHeaders();
+      const submitResponse = await fetch("/api/promo-video", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          imageUrl: await videoImageUrl(heroSection.imageUrl),
+          resolution,
+          request: project.request
+        })
+      });
+      const submitData = await readApiResponse(submitResponse);
+      if (!submitResponse.ok) throw new Error(submitData.error || "홍보영상 요청에 실패했습니다.");
+
+      setToast(`홍보영상(${resolution}) 생성 중입니다. 보통 1~3분 걸립니다.`);
+      const result = await pollVideo("/api/promo-video", submitData.requestId, headers, `&resolution=${resolution}`);
+      if (typeof result.creditsRemaining === "number") setCredits(result.creditsRemaining);
+
+      const updatedProject: Project = { ...project, promoVideoUrl: result.videoUrl };
+      setActiveProject(updatedProject);
+      setProjects((current) => [updatedProject, ...current.filter((candidate) => candidate.id !== updatedProject.id)].slice(0, 20));
+      scheduleAutoSave(updatedProject);
+      setToast("홍보영상 완성! 결과 상단에서 재생·다운로드할 수 있습니다.");
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "홍보영상 생성 중 오류가 발생했습니다.");
+    } finally {
+      setPromoBusy(false);
+    }
+  }
+
   async function redeemInviteCode() {
     const code = inviteCode.trim();
     if (!code) {
@@ -1075,6 +1201,10 @@ export function RedesignWizard() {
             editingSectionId={editingSectionId}
             openaiKey={openaiKey}
             saveStatus={saveStatus}
+            onMotion={generateMotion}
+            motionSectionId={motionSectionId}
+            onPromoVideo={generatePromoVideo}
+            promoBusy={promoBusy}
           />
         )}
       </main>
@@ -1123,6 +1253,13 @@ export function RedesignWizard() {
               <label className="mb-2 block text-xs font-bold text-muted-foreground">Google Nano Banana 2 API 키</label>
               <Input type="password" value={googleKey} onChange={(event) => setGoogleKey(event.target.value)} placeholder="AIza..." />
             </div>
+            {accountType === "student" ? (
+              <div>
+                <label className="mb-2 block text-xs font-bold text-muted-foreground">fal.ai API 키 (영상 기능)</label>
+                <Input type="password" value={falKey} onChange={(event) => setFalKey(event.target.value)} placeholder="키ID:시크릿" />
+                <p className="mt-1 text-[11px] text-muted-foreground">수강생은 본인 fal 키로 영상을 생성합니다. 브라우저에만 저장되고 서버에 저장되지 않습니다.</p>
+              </div>
+            ) : null}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={clearSettings}>입력값 초기화</Button>
               <Button variant="secondary" onClick={() => setSettingsOpen(false)}>닫기</Button>
@@ -2324,7 +2461,11 @@ function Results({
   generating,
   editingSectionId,
   openaiKey,
-  saveStatus
+  saveStatus,
+  onMotion,
+  motionSectionId,
+  onPromoVideo,
+  promoBusy
 }: {
   project?: Project | null;
   rolloutRequest: string;
@@ -2337,6 +2478,10 @@ function Results({
   editingSectionId: string | null;
   openaiKey: string;
   saveStatus: SaveStatus;
+  onMotion: (sectionId: string, preset: string) => void;
+  motionSectionId: string | null;
+  onPromoVideo: (resolution: "720p" | "1080p") => void;
+  promoBusy: boolean;
 }) {
   if (!project) {
     return <Card><CardContent>아직 생성된 프로젝트가 없습니다.</CardContent></Card>;
@@ -2388,8 +2533,34 @@ function Results({
           <FileText className="size-4" />{saved ? "저장됨" : "결과 저장"}
         </Button>
         <Button variant="secondary" onClick={() => onToast("히어로 1장 재생성은 다음 단계에서 연결할 예정입니다.")}><RefreshCw className="size-4" />히어로 다시 생성</Button>
+        <Button variant="secondary" disabled={promoBusy || generating} onClick={() => onPromoVideo("720p")}>
+          {promoBusy ? <Loader2 className="size-4 animate-spin" /> : null}홍보영상 720p
+        </Button>
+        <Button variant="secondary" disabled={promoBusy || generating} onClick={() => onPromoVideo("1080p")}>
+          홍보영상 1080p
+        </Button>
         <Button onClick={downloadAllImages} disabled={downloadableSections.length === 0 || downloadingZip}>{downloadingZip ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}결과 ZIP 다운로드</Button>
       </Topbar>
+
+      {project.promoVideoUrl ? (
+        <Card className="mb-4">
+          <CardHeader>
+            <div>
+              <CardTitle>홍보영상</CardTitle>
+              <CardDescription>SNS·광고용 MP4입니다. 상세페이지 업로드용은 각 섹션의 모션을 활용하세요.</CardDescription>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => downloadDataUrl(project.promoVideoUrl!, `${sanitizeDownloadName(title)}-promo.mp4`)}
+            >
+              <Download className="size-4" />MP4 다운로드
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <video src={project.promoVideoUrl} controls loop muted playsInline className="max-h-[420px] w-full rounded-md bg-black object-contain" />
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className={cn("grid gap-4", showRollout ? "grid-cols-[minmax(0,1fr)_320px] max-xl:grid-cols-1" : "grid-cols-1")}>
         <Card>
@@ -2412,6 +2583,8 @@ function Results({
                 onToast={onToast}
                 editing={editingSectionId === section.id}
                 disabled={generating}
+                onMotion={onMotion}
+                motionBusy={motionSectionId === section.id}
               />
             ))}
           </CardContent>
@@ -2467,7 +2640,9 @@ function SectionResultCard({
   onEditSection,
   onToast,
   editing,
-  disabled
+  disabled,
+  onMotion,
+  motionBusy
 }: {
   section: SectionResult;
   index: number;
@@ -2477,10 +2652,14 @@ function SectionResultCard({
   onToast: (message: string) => void;
   editing: boolean;
   disabled: boolean;
+  onMotion: (sectionId: string, preset: string) => void;
+  motionBusy: boolean;
 }) {
   const [editRequest, setEditRequest] = React.useState("");
   const [editModel, setEditModel] = React.useState<Model>("openai");
   const [aiCommentPreset, setAiCommentPreset] = React.useState("");
+  const [motionPreset, setMotionPreset] = React.useState("natural");
+  const [showMotion, setShowMotion] = React.useState(false);
   const revisions = React.useMemo(() => ensureSectionRevisions(section), [section]);
   const currentIndex = Math.max(0, revisions.findIndex((revision) => revision.imageUrl === section.imageUrl));
   const [revisionIndex, setRevisionIndex] = React.useState(currentIndex);
@@ -2539,7 +2718,9 @@ function SectionResultCard({
   return (
     <Card className="overflow-hidden shadow-none">
       <div className="relative aspect-[9/16] border-b border-border bg-muted">
-        {activeRevision?.imageUrl ? (
+        {showMotion && section.motionUrl ? (
+          <video src={section.motionUrl} loop autoPlay muted playsInline className="h-full w-full object-contain" />
+        ) : activeRevision?.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={activeRevision.imageUrl} alt={`${section.name} ${activeRevision.label}`} className="h-full w-full object-contain" />
         ) : (
@@ -2592,6 +2773,46 @@ function SectionResultCard({
           <h3 className="text-sm font-semibold">{section.name}</h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{section.purpose}</p>
           <p className="mt-2 text-xs"><strong>원본 참조:</strong> {section.source}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <select
+            value={motionPreset}
+            onChange={(event) => setMotionPreset(event.target.value)}
+            disabled={disabled || motionBusy}
+            className="h-8 rounded-md border border-border bg-white px-2 text-[11px] font-semibold text-muted-foreground"
+            aria-label="모션 프리셋 선택"
+          >
+            <option value="natural">모션: 자연</option>
+            <option value="steam">모션: 김</option>
+            <option value="light">모션: 빛</option>
+            <option value="sparkle">모션: 반짝임</option>
+            <option value="float">모션: 부유</option>
+          </select>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            disabled={disabled || motionBusy || !section.imageUrl}
+            onClick={() => onMotion(section.id, motionPreset)}
+          >
+            {motionBusy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {motionBusy ? "모션 생성 중..." : "모션 생성"}
+          </Button>
+          {section.motionUrl ? (
+            <>
+              <Button type="button" variant="secondary" size="sm" onClick={() => setShowMotion((current) => !current)}>
+                {showMotion ? "이미지 보기" : "모션 재생"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => downloadDataUrl(section.motionUrl!, `${sanitizeDownloadName(`${projectTitle}-${section.id}`)}-motion.mp4`)}
+              >
+                <Download className="size-3.5" />MP4
+              </Button>
+            </>
+          ) : null}
         </div>
         <Button
           type="button"

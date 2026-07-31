@@ -77,3 +77,16 @@ export async function getRecentLedger(userId: string, limit = 20) {
 export function serverImageKeyFor(provider: "openai" | "google"): string {
   return provider === "google" ? process.env.GOOGLE_API_KEY || "" : process.env.OPENAI_API_KEY || "";
 }
+
+// 비동기 작업(영상 등)의 이중 차감 방지: 같은 ref로 장부 기록이 이미 있으면 건너뛴다.
+export async function hasLedgerEntry(refType: string, refId: string): Promise<boolean> {
+  const supabase = adminClient();
+  if (!supabase) return false;
+  const { data } = await supabase
+    .from("credit_ledger")
+    .select("id")
+    .eq("ref_type", refType)
+    .eq("ref_id", refId)
+    .limit(1);
+  return Boolean(data && data.length > 0);
+}
