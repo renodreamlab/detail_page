@@ -30,8 +30,14 @@ export default function Page() {
         </div>
       </section>
 
-      <footer className="relative z-10 flex min-h-16 items-center justify-center border-t border-white/10 px-4 text-xs font-semibold text-white/68">
-        PhoenixAI
+      <footer className="relative z-10 grid min-h-16 place-items-center gap-1.5 border-t border-white/10 px-4 py-4 text-xs text-white/68">
+        <span className="font-semibold">PhoenixAI · RENOABLE Detail Page Maker</span>
+        <span className="flex gap-4 text-[11px]">
+          <Link href="/terms" className="hover:text-white">이용약관</Link>
+          <Link href="/privacy" className="hover:text-white">개인정보처리방침</Link>
+          <Link href="/refund" className="hover:text-white">환불 정책</Link>
+          <Link href="/pricing" className="hover:text-white">크레딧 충전</Link>
+        </span>
       </footer>
     </main>
   );

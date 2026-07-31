@@ -23,6 +23,7 @@ export function LegalPage({ title, updated, children }: { title: string; updated
           <span className="flex gap-3">
             <Link href="/terms" className="hover:text-neutral-600">이용약관</Link>
             <Link href="/privacy" className="hover:text-neutral-600">개인정보처리방침</Link>
+            <Link href="/refund" className="hover:text-neutral-600">환불 정책</Link>
           </span>
         </footer>
       </article>
