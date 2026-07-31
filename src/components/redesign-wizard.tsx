@@ -46,6 +46,7 @@ import {
 
 type Model = "openai" | "google";
 type View = "dashboard" | "workspace" | "results";
+type SaveStatus = "idle" | "saving" | "saved" | "dirty";
 
 type SectionResult = {
   id: string;
@@ -278,9 +279,11 @@ export function RedesignWizard() {
   const [editingSectionId, setEditingSectionId] = React.useState<string | null>(null);
   const [toast, setToast] = React.useState("");
   const [rolloutRequest, setRolloutRequest] = React.useState("");
+  const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("idle");
   const inputRef = React.useRef<HTMLInputElement>(null);
   const knowledgeInputRef = React.useRef<HTMLInputElement>(null);
   const generationAbortRef = React.useRef<AbortController | null>(null);
+  const autoSaveTimerRef = React.useRef<number | null>(null);
 
   React.useEffect(() => {
     return onAuthChange(setCloudUser);
@@ -309,6 +312,18 @@ export function RedesignWizard() {
     const timer = window.setTimeout(() => setToast(""), 2800);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  // 이탈 경고: 저장 대기/저장 중이거나 생성 중이면 페이지를 닫기 전에 확인을 받는다.
+  React.useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (saveStatus === "dirty" || saveStatus === "saving" || generating) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [saveStatus, generating]);
 
   React.useEffect(() => {
     if (!generating || !generationPlan) {
@@ -491,6 +506,8 @@ export function RedesignWizard() {
       setActiveProject(finalProject);
       setView("results");
       setToast(data.project.warning || `${models[selectedModel].label}로 ${project.sections.length}장 생성 완료`);
+      // 자동 저장 3/3의 첫 축: 생성 성공 즉시 저장해 새로고침·이탈에도 결과를 보존한다.
+      void autoSaveProject(finalProject);
       return finalProject;
     } catch (error) {
       reportClientLog("generate:error", {
@@ -641,6 +658,11 @@ export function RedesignWizard() {
       return;
     }
 
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    setSaveStatus("saving");
     const savedProject = { ...targetProject, title: projectDisplayTitle(targetProject), savedAt: new Date().toISOString(), status: "저장됨" };
     try {
       await saveProjectToDb(savedProject);
@@ -658,9 +680,59 @@ export function RedesignWizard() {
           sections: savedProject.sections
         }).catch(() => {});
       }
+      setSaveStatus("saved");
     } catch (error) {
+      setSaveStatus("dirty");
       setToast(error instanceof Error ? error.message : "결과 저장 중 오류가 발생했습니다.");
     }
+  }
+
+  // 자동 저장 1/3: 생성 직후·편집 지연 저장에서 호출한다. 진행 중 시퀀스의 더 새로운
+  // 상태를 덮어쓰지 않도록 id + 섹션 수로 가드한다. 실패해도 조용히 dirty로 남긴다.
+  async function autoSaveProject(project: Project) {
+    if (autoSaveTimerRef.current) {
+      window.clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    setSaveStatus("saving");
+    const savedProject = { ...project, title: projectDisplayTitle(project), savedAt: new Date().toISOString(), status: "저장됨" };
+    try {
+      await saveProjectToDb(savedProject);
+      setActiveProject((current) => (
+        current && current.id === savedProject.id && current.sections.length === savedProject.sections.length
+          ? savedProject
+          : current
+      ));
+      setProjects((current) => {
+        const existing = current.find((candidate) => candidate.id === savedProject.id);
+        if (existing && existing.sections.length > savedProject.sections.length) return current;
+        return [savedProject, ...current.filter((candidate) => candidate.id !== savedProject.id)].slice(0, 20);
+      });
+      if (cloudUser) {
+        upsertProject({
+          local_id: savedProject.id,
+          title: savedProject.title,
+          channel: savedProject.channel,
+          ratio: savedProject.ratio,
+          model: savedProject.model,
+          request: savedProject.request,
+          sections: savedProject.sections
+        }).catch(() => {});
+      }
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("dirty");
+    }
+  }
+
+  // 자동 저장 2/3: 부분 편집 후 10초 지연 저장. 새 편집이 오면 타이머를 다시 건다.
+  function scheduleAutoSave(project: Project) {
+    if (autoSaveTimerRef.current) window.clearTimeout(autoSaveTimerRef.current);
+    setSaveStatus("dirty");
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      void autoSaveProject(project);
+    }, 10000);
   }
 
   async function editSection(sectionId: string, editRequest: string, model: Model) {
@@ -728,7 +800,8 @@ export function RedesignWizard() {
       };
       setActiveProject(updatedProject);
       setProjects((current) => [updatedProject, ...current.filter((candidate) => candidate.id !== updatedProject.id)].slice(0, 20));
-      setToast(data.warning || `${section.name} 편집 완료. 마음에 들면 결과 저장을 눌러주세요.`);
+      scheduleAutoSave(updatedProject);
+      setToast(data.warning || `${section.name} 편집 완료. 10초 후 자동 저장됩니다.`);
     } catch (error) {
       reportClientLog("edit-section:error", {
         sectionId,
@@ -867,6 +940,7 @@ export function RedesignWizard() {
             generating={generating}
             editingSectionId={editingSectionId}
             openaiKey={openaiKey}
+            saveStatus={saveStatus}
           />
         )}
       </main>
@@ -2061,7 +2135,8 @@ function Results({
   onGenerateRest,
   generating,
   editingSectionId,
-  openaiKey
+  openaiKey,
+  saveStatus
 }: {
   project?: Project | null;
   rolloutRequest: string;
@@ -2073,6 +2148,7 @@ function Results({
   generating: boolean;
   editingSectionId: string | null;
   openaiKey: string;
+  saveStatus: SaveStatus;
 }) {
   if (!project) {
     return <Card><CardContent>아직 생성된 프로젝트가 없습니다.</CardContent></Card>;
@@ -2103,6 +2179,13 @@ function Results({
   return (
     <section>
       <Topbar eyebrow="OUTPUT" title={title}>
+        {saveStatus === "saving" ? (
+          <span className="flex items-center gap-1 self-center text-[11px] font-semibold text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />저장 중...
+          </span>
+        ) : saveStatus === "dirty" ? (
+          <span className="self-center text-[11px] font-semibold text-[#b45309]">변경사항 자동 저장 대기</span>
+        ) : null}
         <Button
           variant="secondary"
           onClick={saved ? undefined : onSave}
