@@ -951,6 +951,12 @@ export function RedesignWizard() {
               <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5">
                 <span className="min-w-0 flex-1 truncate">내 크레딧</span>
                 <Badge className="shrink-0 whitespace-nowrap" variant={credits > 0 ? "solidBlue" : "solidGray"}>{credits}개</Badge>
+                <a
+                  href="/pricing"
+                  className="shrink-0 rounded-md bg-[#ff6f61] px-2 py-1 text-[10px] font-bold text-white transition hover:bg-[#ff806f]"
+                >
+                  충전
+                </a>
               </div>
             ) : null}
           </CardContent>
