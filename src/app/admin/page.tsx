@@ -158,6 +158,10 @@ function BankTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: (me
   const [status, setStatus] = React.useState("pending");
   const [loading, setLoading] = React.useState(true);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  // window.confirm/prompt는 환경에 따라 차단되므로 인라인 확인 UI를 쓴다.
+  const [confirmId, setConfirmId] = React.useState<string | null>(null);
+  const [rejectingId, setRejectingId] = React.useState<string | null>(null);
+  const [rejectMemo, setRejectMemo] = React.useState("");
 
   const load = React.useCallback(async (nextStatus: string) => {
     setLoading(true);
@@ -176,11 +180,7 @@ function BankTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: (me
     load(status);
   }, [status, load]);
 
-  async function decide(request: BankRequest, action: "approve" | "reject") {
-    const memo = action === "reject" ? window.prompt("거절 사유(메모)를 입력하세요.", "") ?? "" : "";
-    if (action === "reject" && memo === null) return;
-    if (action === "approve" && !window.confirm(`${request.depositor_name}님의 ${request.credits}크레딧(${request.amount.toLocaleString()}원 입금)을 승인할까요?`)) return;
-
+  async function decide(request: BankRequest, action: "approve" | "reject", memo = "") {
     setBusyId(request.id);
     try {
       const data = await adminFetch("/api/admin/bank-transfers", {
@@ -188,6 +188,9 @@ function BankTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: (me
         body: JSON.stringify({ requestId: request.id, action, memo })
       });
       onMessage(action === "approve" ? `승인 완료. 지급 후 잔액 ${data.balance}크레딧` : "거절 처리했습니다.");
+      setConfirmId(null);
+      setRejectingId(null);
+      setRejectMemo("");
       load(status);
     } catch (error) {
       onMessage(error instanceof Error ? error.message : "처리 실패");
@@ -239,24 +242,74 @@ function BankTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: (me
               </div>
             </div>
             {request.status === "pending" ? (
-              <div className="flex shrink-0 gap-2">
-                <button
-                  type="button"
-                  disabled={busyId === request.id}
-                  onClick={() => decide(request, "approve")}
-                  className="inline-flex min-h-10 items-center rounded-md bg-[#0d9488] px-4 text-sm font-bold text-white disabled:opacity-60"
-                >
-                  승인
-                </button>
-                <button
-                  type="button"
-                  disabled={busyId === request.id}
-                  onClick={() => decide(request, "reject")}
-                  className="inline-flex min-h-10 items-center rounded-md border border-red-300 px-4 text-sm font-bold text-red-600 disabled:opacity-60"
-                >
-                  거절
-                </button>
-              </div>
+              rejectingId === request.id ? (
+                <div className="flex shrink-0 items-center gap-2 max-md:flex-wrap">
+                  <input
+                    autoFocus
+                    value={rejectMemo}
+                    onChange={(event) => setRejectMemo(event.target.value)}
+                    placeholder="거절 사유 (메모)"
+                    className="min-h-10 w-44 rounded-md border border-neutral-300 px-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={busyId === request.id}
+                    onClick={() => decide(request, "reject", rejectMemo.trim())}
+                    className="inline-flex min-h-10 items-center rounded-md bg-red-600 px-3 text-sm font-bold text-white disabled:opacity-60"
+                  >
+                    거절 확정
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRejectingId(null);
+                      setRejectMemo("");
+                    }}
+                    className="inline-flex min-h-10 items-center rounded-md border border-neutral-300 px-3 text-sm font-bold text-neutral-600"
+                  >
+                    취소
+                  </button>
+                </div>
+              ) : (
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    disabled={busyId === request.id}
+                    onClick={() => {
+                      if (confirmId === request.id) decide(request, "approve");
+                      else setConfirmId(request.id);
+                    }}
+                    className={
+                      confirmId === request.id
+                        ? "inline-flex min-h-10 items-center rounded-md bg-[#0b7a70] px-4 text-sm font-bold text-white ring-2 ring-[#0d9488]/40 disabled:opacity-60"
+                        : "inline-flex min-h-10 items-center rounded-md bg-[#0d9488] px-4 text-sm font-bold text-white disabled:opacity-60"
+                    }
+                  >
+                    {busyId === request.id ? "처리 중..." : confirmId === request.id ? `${request.credits}크레딧 지급 확정` : "승인"}
+                  </button>
+                  {confirmId === request.id ? (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmId(null)}
+                      className="inline-flex min-h-10 items-center rounded-md border border-neutral-300 px-3 text-sm font-bold text-neutral-600"
+                    >
+                      취소
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busyId === request.id}
+                      onClick={() => {
+                        setRejectingId(request.id);
+                        setConfirmId(null);
+                      }}
+                      className="inline-flex min-h-10 items-center rounded-md border border-red-300 px-4 text-sm font-bold text-red-600 disabled:opacity-60"
+                    >
+                      거절
+                    </button>
+                  )}
+                </div>
+              )
             ) : (
               <span className={`shrink-0 rounded-md px-2 py-1 text-xs font-bold ${request.status === "approved" ? "bg-teal-50 text-teal-700" : "bg-red-50 text-red-600"}`}>
                 {request.status === "approved" ? "승인됨" : "거절됨"}
@@ -274,6 +327,10 @@ function MembersTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: 
   const [members, setMembers] = React.useState<Member[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  // window.prompt는 환경에 따라 차단되므로 인라인 폼을 쓴다.
+  const [adjusting, setAdjusting] = React.useState<{ id: string; sign: 1 | -1 } | null>(null);
+  const [adjustAmount, setAdjustAmount] = React.useState("10");
+  const [adjustReason, setAdjustReason] = React.useState("");
 
   const search = React.useCallback(async (query: string) => {
     setLoading(true);
@@ -292,19 +349,17 @@ function MembersTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: 
     search("");
   }, [search]);
 
-  async function adjust(member: Member, sign: 1 | -1) {
-    const label = sign > 0 ? "지급" : "회수";
-    const amountText = window.prompt(`${member.email}님에게 ${label}할 크레딧 수량을 입력하세요.`, "10");
-    if (amountText === null) return;
-    const amount = Math.abs(parseInt(amountText, 10));
+  async function submitAdjust(member: Member) {
+    if (!adjusting) return;
+    const label = adjusting.sign > 0 ? "지급" : "회수";
+    const amount = Math.abs(parseInt(adjustAmount, 10));
     if (!Number.isInteger(amount) || amount <= 0) {
       onMessage("1 이상의 정수를 입력해주세요.");
       return;
     }
-    const reason = window.prompt(`${label} 사유를 입력하세요. (장부에 기록됩니다)`, "");
-    if (reason === null) return;
-    if (!reason.trim()) {
-      onMessage("사유는 필수입니다.");
+    const reason = adjustReason.trim();
+    if (!reason) {
+      onMessage("사유는 필수입니다. (장부에 기록됩니다)");
       return;
     }
 
@@ -312,9 +367,11 @@ function MembersTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: 
     try {
       const data = await adminFetch("/api/admin/members", {
         method: "POST",
-        body: JSON.stringify({ userId: member.id, delta: sign * amount, reason: reason.trim() })
+        body: JSON.stringify({ userId: member.id, delta: adjusting.sign * amount, reason })
       });
       onMessage(`${label} 완료. 잔액 ${data.balance}크레딧`);
+      setAdjusting(null);
+      setAdjustReason("");
       search(email);
     } catch (error) {
       onMessage(error instanceof Error ? error.message : "처리 실패");
@@ -357,25 +414,71 @@ function MembersTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: 
                 {member.last_sign_in_at ? <> · 최근 로그인 {new Date(member.last_sign_in_at).toLocaleDateString("ko-KR")}</> : null}
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="rounded-md bg-neutral-100 px-2.5 py-1 text-sm font-extrabold">{member.credits}개</span>
-              <button
-                type="button"
-                disabled={busyId === member.id}
-                onClick={() => adjust(member, 1)}
-                className="inline-flex min-h-10 items-center rounded-md bg-[#0d9488] px-3 text-sm font-bold text-white disabled:opacity-60"
-              >
-                지급
-              </button>
-              <button
-                type="button"
-                disabled={busyId === member.id}
-                onClick={() => adjust(member, -1)}
-                className="inline-flex min-h-10 items-center rounded-md border border-red-300 px-3 text-sm font-bold text-red-600 disabled:opacity-60"
-              >
-                회수
-              </button>
-            </div>
+            {adjusting?.id === member.id ? (
+              <div className="flex shrink-0 items-center gap-2 max-md:flex-wrap">
+                <span className="text-xs font-bold text-neutral-500">{adjusting.sign > 0 ? "지급" : "회수"}</span>
+                <input
+                  autoFocus
+                  value={adjustAmount}
+                  onChange={(event) => setAdjustAmount(event.target.value)}
+                  inputMode="numeric"
+                  placeholder="수량"
+                  className="min-h-10 w-16 rounded-md border border-neutral-300 px-2 text-sm"
+                />
+                <input
+                  value={adjustReason}
+                  onChange={(event) => setAdjustReason(event.target.value)}
+                  placeholder="사유 (필수, 장부 기록)"
+                  className="min-h-10 w-44 rounded-md border border-neutral-300 px-2 text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={busyId === member.id}
+                  onClick={() => submitAdjust(member)}
+                  className={`inline-flex min-h-10 items-center rounded-md px-3 text-sm font-bold text-white disabled:opacity-60 ${adjusting.sign > 0 ? "bg-[#0d9488]" : "bg-red-600"}`}
+                >
+                  {busyId === member.id ? "처리 중..." : "확정"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdjusting(null);
+                    setAdjustReason("");
+                  }}
+                  className="inline-flex min-h-10 items-center rounded-md border border-neutral-300 px-3 text-sm font-bold text-neutral-600"
+                >
+                  취소
+                </button>
+              </div>
+            ) : (
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="rounded-md bg-neutral-100 px-2.5 py-1 text-sm font-extrabold">{member.credits}개</span>
+                <button
+                  type="button"
+                  disabled={busyId === member.id}
+                  onClick={() => {
+                    setAdjusting({ id: member.id, sign: 1 });
+                    setAdjustAmount("10");
+                    setAdjustReason("");
+                  }}
+                  className="inline-flex min-h-10 items-center rounded-md bg-[#0d9488] px-3 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  지급
+                </button>
+                <button
+                  type="button"
+                  disabled={busyId === member.id}
+                  onClick={() => {
+                    setAdjusting({ id: member.id, sign: -1 });
+                    setAdjustAmount("10");
+                    setAdjustReason("");
+                  }}
+                  className="inline-flex min-h-10 items-center rounded-md border border-red-300 px-3 text-sm font-bold text-red-600 disabled:opacity-60"
+                >
+                  회수
+                </button>
+              </div>
+            )}
           </div>
         ))
       )}
