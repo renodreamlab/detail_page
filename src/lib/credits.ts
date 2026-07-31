@@ -28,14 +28,16 @@ export async function getUserFromRequest(request: Request): Promise<User | null>
 
 export type Profile = {
   credits: number;
-  account_type?: string;
+  account_type: "customer" | "student";
 };
 
 export async function getProfile(userId: string): Promise<Profile> {
   const supabase = adminClient();
-  if (!supabase) return { credits: 0 };
-  const { data } = await supabase.from("profiles").select("credits").eq("id", userId).maybeSingle();
-  return data ? { credits: Number(data.credits) || 0 } : { credits: 0 };
+  if (!supabase) return { credits: 0, account_type: "customer" };
+  const { data } = await supabase.from("profiles").select("credits, account_type").eq("id", userId).maybeSingle();
+  return data
+    ? { credits: Number(data.credits) || 0, account_type: data.account_type === "student" ? "student" : "customer" }
+    : { credits: 0, account_type: "customer" };
 }
 
 // 잔액 변경 + 장부 기록을 DB 함수에서 원자적으로 처리한다. 반환값은 변경 후 잔액.

@@ -33,27 +33,31 @@ export async function POST(request: NextRequest) {
     const clientKey = provider === "google" ? googleKey : openaiKey;
     const ratio = String(project.ratio || "9:16");
 
-    // 크레딧 모드: 로그인 + 서버 키가 있으면 서버 키로 편집하고 성공 시 1크레딧 차감.
+    // 크레딧 모드: 로그인한 customer + 서버 키가 있으면 서버 키로 편집하고 성공 시 1크레딧 차감.
+    // student(수강생)는 본인 키 사용 + 무차감.
     const user = await getUserFromRequest(request);
+    const profile = user ? await getProfile(user.id) : null;
+    const isStudent = profile?.account_type === "student";
     const serverKey = serverImageKeyFor(provider);
-    const chargeCredits = Boolean(user && serverKey);
+    const chargeCredits = Boolean(user && serverKey && !isStudent);
     const apiKey = chargeCredits ? serverKey : clientKey;
 
     if (!apiKey) {
       return NextResponse.json(
-        { error: provider === "google" ? "Google Nano Banana 2 API 키가 필요합니다." : "OpenAI Image 2.0 API 키가 필요합니다." },
+        {
+          error: isStudent
+            ? "수강생 계정은 본인 API 키로 편집합니다. API 키 설정에서 키를 입력해주세요."
+            : provider === "google" ? "Google Nano Banana 2 API 키가 필요합니다." : "OpenAI Image 2.0 API 키가 필요합니다."
+        },
         { status: 400 }
       );
     }
 
-    if (chargeCredits) {
-      const profile = await getProfile(user!.id);
-      if (profile.credits < 1) {
-        return NextResponse.json(
-          { error: `크레딧이 부족합니다. (필요 1, 보유 ${profile.credits}) 충전 후 이용해주세요.` },
-          { status: 402 }
-        );
-      }
+    if (chargeCredits && profile && profile.credits < 1) {
+      return NextResponse.json(
+        { error: `크레딧이 부족합니다. (필요 1, 보유 ${profile.credits}) 충전 후 이용해주세요.` },
+        { status: 402 }
+      );
     }
     if (!image) {
       return NextResponse.json({ error: "수정할 섹션 이미지가 없습니다." }, { status: 400 });

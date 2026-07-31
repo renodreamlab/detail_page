@@ -120,9 +120,7 @@ export default function AdminPage() {
 
       {tab === "bank" ? <BankTab onDenied={() => setDenied(true)} onMessage={setMessage} /> : null}
       {tab === "members" ? <MembersTab onDenied={() => setDenied(true)} onMessage={setMessage} /> : null}
-      {tab === "invites" ? (
-        <p className="text-sm text-neutral-500">수강생 초대 코드는 다음 단계(Phase 6)에서 활성화됩니다.</p>
-      ) : null}
+      {tab === "invites" ? <InvitesTab onDenied={() => setDenied(true)} onMessage={setMessage} /> : null}
 
       {message ? (
         <div className="fixed bottom-4 right-4 z-50 max-w-sm rounded-md bg-neutral-900 px-4 py-3 text-sm text-white shadow-xl">{message}</div>
@@ -315,6 +313,140 @@ function BankTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: (me
                 {request.status === "approved" ? "승인됨" : "거절됨"}
               </span>
             )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+type InviteCode = {
+  code: string;
+  label: string | null;
+  max_uses: number;
+  used_count: number;
+  active: boolean;
+  created_at: string;
+};
+
+function InvitesTab({ onDenied, onMessage }: { onDenied: () => void; onMessage: (message: string) => void }) {
+  const [codes, setCodes] = React.useState<InviteCode[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [label, setLabel] = React.useState("");
+  const [maxUses, setMaxUses] = React.useState("1");
+  const [creating, setCreating] = React.useState(false);
+  const [busyCode, setBusyCode] = React.useState<string | null>(null);
+
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await adminFetch("/api/admin/invites");
+      setCodes(data.codes || []);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("관리자 권한")) onDenied();
+      else onMessage(error instanceof Error ? error.message : "목록 조회 실패");
+    } finally {
+      setLoading(false);
+    }
+  }, [onDenied, onMessage]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  async function create() {
+    const uses = Math.max(1, parseInt(maxUses, 10) || 1);
+    setCreating(true);
+    try {
+      const data = await adminFetch("/api/admin/invites", {
+        method: "POST",
+        body: JSON.stringify({ label: label.trim(), maxUses: uses })
+      });
+      onMessage(`코드 발급 완료: ${data.code}`);
+      setLabel("");
+      setMaxUses("1");
+      load();
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "발급 실패");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function toggle(code: InviteCode) {
+    setBusyCode(code.code);
+    try {
+      await adminFetch("/api/admin/invites", {
+        method: "PATCH",
+        body: JSON.stringify({ code: code.code, active: !code.active })
+      });
+      onMessage(code.active ? "코드를 회수(비활성)했습니다." : "코드를 다시 활성화했습니다.");
+      load();
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "상태 변경 실패");
+    } finally {
+      setBusyCode(null);
+    }
+  }
+
+  return (
+    <div className="grid gap-3">
+      <form
+        className="flex items-center gap-2 rounded-xl border border-black/8 bg-white p-4 shadow-sm max-md:flex-wrap"
+        onSubmit={(event) => {
+          event.preventDefault();
+          create();
+        }}
+      >
+        <input
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          placeholder="메모 (예: 7월 수강생)"
+          className="min-h-11 flex-1 rounded-md border border-neutral-300 px-3 text-sm"
+        />
+        <input
+          value={maxUses}
+          onChange={(event) => setMaxUses(event.target.value)}
+          inputMode="numeric"
+          placeholder="사용 횟수"
+          className="min-h-11 w-24 rounded-md border border-neutral-300 px-3 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={creating}
+          className="inline-flex min-h-11 items-center rounded-md bg-[#1a1a1a] px-5 text-sm font-bold text-white disabled:opacity-60"
+        >
+          {creating ? "발급 중..." : "코드 발급"}
+        </button>
+      </form>
+
+      {loading ? (
+        <p className="py-8 text-center text-sm text-neutral-500">불러오는 중...</p>
+      ) : codes.length === 0 ? (
+        <p className="py-8 text-center text-sm text-neutral-500">발급된 코드가 없습니다.</p>
+      ) : (
+        codes.map((code) => (
+          <div key={code.code} className="flex items-center justify-between gap-3 rounded-xl border border-black/8 bg-white p-4 shadow-sm max-md:flex-col max-md:items-stretch">
+            <div className="min-w-0">
+              <div className="font-mono text-sm font-extrabold tracking-wide">{code.code}</div>
+              <div className="mt-1 text-xs text-neutral-500">
+                {code.label ? <>{code.label} · </> : null}
+                사용 {code.used_count}/{code.max_uses} · {new Date(code.created_at).toLocaleDateString("ko-KR")}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className={`rounded-md px-2 py-1 text-xs font-bold ${code.active ? "bg-teal-50 text-teal-700" : "bg-neutral-100 text-neutral-500"}`}>
+                {code.active ? "활성" : "비활성"}
+              </span>
+              <button
+                type="button"
+                disabled={busyCode === code.code}
+                onClick={() => toggle(code)}
+                className="inline-flex min-h-10 items-center rounded-md border border-neutral-300 px-3 text-sm font-bold text-neutral-600 disabled:opacity-60"
+              >
+                {code.active ? "회수" : "재활성화"}
+              </button>
+            </div>
           </div>
         ))
       )}

@@ -287,7 +287,11 @@ export function RedesignWizard() {
   const [rolloutRequest, setRolloutRequest] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState<SaveStatus>("idle");
   const [credits, setCredits] = React.useState<number | null>(null);
+  const [accountType, setAccountType] = React.useState<"customer" | "student" | null>(null);
   const [isAdmin, setIsAdmin] = React.useState(false);
+  const [inviteOpen, setInviteOpen] = React.useState(false);
+  const [inviteCode, setInviteCode] = React.useState("");
+  const [inviteBusy, setInviteBusy] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const knowledgeInputRef = React.useRef<HTMLInputElement>(null);
   const generationAbortRef = React.useRef<AbortController | null>(null);
@@ -310,6 +314,7 @@ export function RedesignWizard() {
       const data = await response.json();
       if (typeof data.credits === "number") setCredits(data.credits);
       if (typeof data.isAdmin === "boolean") setIsAdmin(data.isAdmin);
+      if (data.accountType === "student" || data.accountType === "customer") setAccountType(data.accountType);
     } catch {
       // 잔액 조회 실패는 조용히 무시 (생성 자체를 막지 않는다)
     }
@@ -432,8 +437,9 @@ export function RedesignWizard() {
       return null;
     }
 
-    // 로그인 + 서버 키 설정 환경이면 본인 키 없이 크레딧으로 생성한다.
-    const serverKeyAvailable = Boolean(cloudUser) &&
+    // 로그인한 customer + 서버 키 설정 환경이면 본인 키 없이 크레딧으로 생성한다.
+    // 수강생(student)은 본인 키가 필요하다.
+    const serverKeyAvailable = Boolean(cloudUser) && accountType !== "student" &&
       (selectedModel === "openai" ? serverConfig.serverOpenaiKeyConfigured : serverConfig.serverGoogleKeyConfigured);
     const hasKey = serverKeyAvailable || (selectedModel === "openai" ? Boolean(openaiKey) : Boolean(googleKey));
     if (!hasKey) {
@@ -811,7 +817,7 @@ export function RedesignWizard() {
       setToast("저장된 이미지가 없는 섹션은 수정할 수 없습니다. 다시 생성한 뒤 시도해주세요.");
       return;
     }
-    const editServerKeyAvailable = Boolean(cloudUser) &&
+    const editServerKeyAvailable = Boolean(cloudUser) && accountType !== "student" &&
       (model === "openai" ? serverConfig.serverOpenaiKeyConfigured : serverConfig.serverGoogleKeyConfigured);
     const hasKey = editServerKeyAvailable || (model === "openai" ? Boolean(openaiKey) : Boolean(googleKey));
     if (!hasKey) {
@@ -887,6 +893,35 @@ export function RedesignWizard() {
     }
   }
 
+  async function redeemInviteCode() {
+    const code = inviteCode.trim();
+    if (!code) {
+      setToast("초대 코드를 입력해주세요.");
+      return;
+    }
+    setInviteBusy(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("로그인이 필요합니다.");
+      const response = await fetch("/api/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "코드 처리에 실패했습니다.");
+      setAccountType("student");
+      setInviteOpen(false);
+      setInviteCode("");
+      setToast("수강생 계정으로 전환됐습니다. 이제 본인 API 키로 무제한(무차감) 생성이 가능합니다.");
+      refreshCredits();
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "코드 처리에 실패했습니다.");
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
   function cancelGeneration() {
     generationAbortRef.current?.abort();
     generationAbortRef.current = null;
@@ -958,7 +993,12 @@ export function RedesignWizard() {
               <span className="min-w-0 flex-1 truncate">맞춤형 Data 설정</span>
               <Badge className="shrink-0 whitespace-nowrap" variant={serverConfig.knowledgeConfigured ? "solidBlue" : "solidGray"}>{serverConfig.knowledgeConfigured ? "설정됨" : "미설정"}</Badge>
             </div>
-            {cloudUser && credits !== null ? (
+            {cloudUser && accountType === "student" ? (
+              <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5">
+                <span className="min-w-0 flex-1 truncate">🎓 수강생</span>
+                <Badge className="shrink-0 whitespace-nowrap" variant="green">본인 키 사용</Badge>
+              </div>
+            ) : cloudUser && credits !== null ? (
               <div className="flex items-center justify-between gap-2 rounded-md bg-white/70 px-2 py-1.5">
                 <span className="min-w-0 flex-1 truncate">내 크레딧</span>
                 <Badge className="shrink-0 whitespace-nowrap" variant={credits > 0 ? "solidBlue" : "solidGray"}>{credits}개</Badge>
@@ -986,6 +1026,8 @@ export function RedesignWizard() {
             knowledgeCount={Math.max(knowledgeItems.length, serverConfig.knowledgeDocuments)}
             serverConfig={serverConfig}
             cloudUser={cloudUser}
+            accountType={accountType}
+            onInvite={() => setInviteOpen(true)}
             onLogin={signInWithGoogle}
             onLogout={() => cloudSignOut().then(() => setCloudUser(null))}
             onCloud={async () => {
@@ -1036,6 +1078,35 @@ export function RedesignWizard() {
           />
         )}
       </main>
+
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>수강생 코드 입력</DialogTitle>
+            <DialogDescription>
+              발급받은 초대 코드를 입력하면 수강생 계정으로 전환됩니다.
+              수강생은 본인 API 키로 크레딧 차감 없이 생성할 수 있습니다.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 p-4">
+            <Input
+              autoFocus
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value.toUpperCase())}
+              placeholder="PHX-EDU-XXXX"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") redeemInviteCode();
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setInviteOpen(false)}>닫기</Button>
+              <Button onClick={redeemInviteCode} disabled={inviteBusy}>
+                {inviteBusy ? <Loader2 className="size-4 animate-spin" /> : null}적용
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
         <DialogContent>
@@ -1809,6 +1880,8 @@ function Dashboard({
   knowledgeCount,
   serverConfig,
   cloudUser,
+  accountType,
+  onInvite,
   onLogin,
   onLogout,
   onCloud
@@ -1822,6 +1895,8 @@ function Dashboard({
   knowledgeCount: number;
   serverConfig: ServerConfig;
   cloudUser: User | null;
+  accountType: "customer" | "student" | null;
+  onInvite: () => void;
   onLogin: () => void;
   onLogout: () => void;
   onCloud: () => void;
@@ -1843,6 +1918,13 @@ function Dashboard({
             <Button variant="secondary" onClick={onLogin}><LogIn className="size-4" />Google 로그인</Button>
           )
         )}
+        {cloudUser ? (
+          accountType === "student" ? (
+            <Badge variant="green">🎓 수강생 · 본인 키 사용</Badge>
+          ) : (
+            <Button variant="secondary" onClick={onInvite}>🎓 수강생 코드</Button>
+          )
+        ) : null}
         <Button variant="secondary" onClick={onSettings}><KeyRound className="size-4" />API 키 설정</Button>
         <Button variant="secondary" onClick={onKnowledge}><FileText className="size-4" />맞춤형 Data 설정 {knowledgeCount > 0 ? `(${knowledgeCount})` : ""}</Button>
         <Button onClick={onNew}><Sparkles className="size-4" />새 작업 시작</Button>

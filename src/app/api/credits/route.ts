@@ -12,5 +12,10 @@ export async function GET(request: NextRequest) {
   }
 
   const [profile, ledger] = await Promise.all([getProfile(user.id), getRecentLedger(user.id)]);
-  return NextResponse.json({ credits: profile.credits, ledger, isAdmin: isAdminEmail(user.email) });
+  return NextResponse.json({
+    credits: profile.credits,
+    accountType: profile.account_type,
+    ledger,
+    isAdmin: isAdminEmail(user.email)
+  });
 }
