@@ -41,7 +41,10 @@ import {
   listCloudProjects,
   loadCloudProject,
   renameCloudProject,
-  uploadReferenceFilesToStorage
+  deleteCloudProject,
+  resolveSectionImages,
+  uploadReferenceFilesToStorage,
+  type CloudSection
 } from "@/lib/cloud-sync";
 
 type Model = "openai" | "google";
@@ -55,6 +58,8 @@ type SectionResult = {
   source: string;
   prompt: string;
   imageUrl?: string;
+  // 클라우드 Storage 경로. 있으면 imageUrl은 만료되는 서명 URL이므로 열 때마다 재서명한다.
+  imagePath?: string;
   revisions?: SectionRevision[];
 };
 
@@ -304,6 +309,18 @@ export function RedesignWizard() {
       if (savedProjects.length === 0) return;
       setProjects(savedProjects);
       setActiveProject(savedProjects[0]);
+      // 클라우드 경로 기반 프로젝트의 만료된 서명 URL을 새로 발급해 썸네일을 복원한다.
+      savedProjects
+        .filter((project) => project.sections.some((section) => section.imagePath))
+        .forEach((project) => {
+          resolveSectionImages(project.sections as CloudSection[])
+            .then((sections) => {
+              const refreshed = { ...project, sections: sections as SectionResult[] };
+              setProjects((current) => current.map((candidate) => (candidate.id === project.id ? refreshed : candidate)));
+              setActiveProject((current) => (current?.id === project.id ? refreshed : current));
+            })
+            .catch(() => {});
+        });
     });
   }, []);
 
@@ -580,6 +597,16 @@ export function RedesignWizard() {
   function openProject(project: Project) {
     setActiveProject(project);
     setView("results");
+    // 클라우드 경로 기반 이미지는 서명 URL이 만료될 수 있어 열 때마다 다시 서명한다.
+    if (project.sections.some((section) => section.imagePath)) {
+      resolveSectionImages(project.sections as CloudSection[])
+        .then((sections) => {
+          const refreshed = { ...project, sections: sections as SectionResult[] };
+          setActiveProject((current) => (current?.id === project.id ? refreshed : current));
+          setProjects((current) => current.map((candidate) => (candidate.id === project.id ? refreshed : candidate)));
+        })
+        .catch(() => {});
+    }
   }
 
   async function deleteProject(project: Project) {
@@ -588,6 +615,8 @@ export function RedesignWizard() {
 
     try {
       await deleteProjectFromDb(project.id);
+      // 클라우드 행 + generated 버킷 파일까지 연쇄 정리한다.
+      if (cloudUser) deleteCloudProject(project.id).catch(() => {});
       setProjects((current) => current.filter((candidate) => candidate.id !== project.id));
       setActiveProject((current) => current?.id === project.id ? null : current);
       setToast("작업을 삭제했습니다.");
@@ -1313,6 +1342,13 @@ function sectionSortNumber(sectionId: string) {
 
 function downloadDataUrl(url: string, fileName: string) {
   if (!url) return;
+  if (!url.startsWith("data:") && !url.startsWith("blob:")) {
+    // 교차 출처(서명 URL)는 download 속성이 무시되므로 blob으로 받아 저장한다.
+    imageUrlToBlob(url)
+      .then((blob) => downloadBlob(blob, fileName))
+      .catch(() => {});
+    return;
+  }
   const link = document.createElement("a");
   link.href = url;
   link.download = fileName;
@@ -1380,7 +1416,14 @@ function sanitizeDownloadName(name: string) {
     .slice(0, 120) || "redesign-image";
 }
 
-async function compressImageForRequest(dataUrl: string) {
+async function compressImageForRequest(imageUrl: string) {
+  let dataUrl = imageUrl;
+  if (!dataUrl.startsWith("data:")) {
+    // 클라우드 복원 이미지(서명 URL)는 먼저 데이터 URL로 변환한다(edit API는 data URL만 받는다).
+    const response = await fetch(imageUrl);
+    if (!response.ok) throw new Error("편집할 이미지를 불러오지 못했습니다. 작업을 다시 열어주세요.");
+    dataUrl = await blobToDataUrl(await response.blob());
+  }
   if (!dataUrl.startsWith("data:image/")) return dataUrl;
 
   try {
